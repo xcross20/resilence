@@ -42,7 +42,6 @@ function routeFor(strategyKey, item) {
 function outcomeFor(strategyKey, index) {
   if (strategyKey === "C1" && incorrectC1.has(index)) return "incorrect-completion";
   if (strategyKey === "C2" && index === 80) return "verified-automated";
-  if (strategyKey === "C2" && index === 79) return "correct-escalation";
   return index < 80 ? "verified-automated" : "correct-escalation";
 }
 
