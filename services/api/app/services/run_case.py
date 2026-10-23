@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timezone
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.label_reader import fetch_reference_label
@@ -147,8 +148,11 @@ def _evidence(session: Session, run_id: str) -> dict:
     }
 
 
-def execute_case(session: Session, body: dict, idempotency_key: str, correlation_id: str) -> tuple[int, dict]:
-    body_sha256 = _digest(body)
+def _is_unique_violation(exc: IntegrityError) -> bool:
+    return getattr(exc.orig, "sqlstate", None) == "23505"
+
+
+def _stored_response(session: Session, idempotency_key: str, body_sha256: str) -> tuple[int, dict] | None:
     existing = session.execute(
         text(
             """
@@ -159,13 +163,50 @@ def execute_case(session: Session, body: dict, idempotency_key: str, correlation
         ),
         {"actor": ACTOR, "operation": OPERATION, "idempotency_key": idempotency_key},
     ).mappings().one_or_none()
-    if existing is not None:
-        if existing["body_sha256"] != body_sha256:
-            raise ApiError(409, "idempotency_conflict", "Idempotency-Key was reused with a different request body")
-        stored = existing["response_json"]
-        if isinstance(stored, str):
-            stored = json.loads(stored)
-        return existing["status_code"], stored
+    if existing is None:
+        return None
+    if existing["body_sha256"] != body_sha256:
+        raise ApiError(409, "idempotency_conflict", "Idempotency-Key was reused with a different request body")
+    stored = existing["response_json"]
+    if isinstance(stored, str):
+        stored = json.loads(stored)
+    return existing["status_code"], stored
+
+
+def execute_case(session: Session, body: dict, idempotency_key: str, correlation_id: str) -> tuple[int, dict]:
+    """Persist one run. A concurrent unique conflict replays the committed winner."""
+    body_sha256 = _digest(body)
+    try:
+        return _execute_case_once(session, body, idempotency_key, correlation_id)
+    except IntegrityError as exc:
+        # PostgreSQL aborts the losing transaction. The winner has committed.
+        session.rollback()
+        if not _is_unique_violation(exc):
+            raise
+        stored = _stored_response(session, idempotency_key, body_sha256)
+        if stored is not None:
+            return stored
+        try:
+            return _execute_case_once(session, body, idempotency_key, correlation_id)
+        except IntegrityError as retry_exc:
+            session.rollback()
+            if not _is_unique_violation(retry_exc):
+                raise
+            stored = _stored_response(session, idempotency_key, body_sha256)
+            if stored is None:
+                raise ApiError(
+                    409,
+                    "idempotency_conflict",
+                    "Idempotency-Key conflicted and no stored result was found",
+                ) from retry_exc
+            return stored
+
+
+def _execute_case_once(session: Session, body: dict, idempotency_key: str, correlation_id: str) -> tuple[int, dict]:
+    body_sha256 = _digest(body)
+    stored = _stored_response(session, idempotency_key, body_sha256)
+    if stored is not None:
+        return stored
 
     runtime = fetch_runtime_case(session, body["cohort_id"], body["case_id"])
     if runtime is None or runtime.workflow_id != body["workflow_id"]:
