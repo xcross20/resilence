@@ -1,6 +1,6 @@
-# IMP-001 evidence API
+# Execution optimizer API
 
-One persisted synthetic service-desk case. PostgreSQL is the record. The FastAPI process is the only service.
+One persisted synthetic service-desk acceptance case, plus paired evaluation of two immutable strategy revisions. PostgreSQL is the record. The FastAPI process is the only service.
 
 `runtime_case_v` excludes reference labels from the reader the router uses. Routing, simulation, and pricing do not import the assessor. This is an application isolation control. The database owner can still query `reference_label`. It is not a hardened database security boundary.
 
@@ -39,6 +39,16 @@ curl -s -X POST localhost:8000/api/v1/executions \
 
 `SD-081` is observed as `ambiguous` and labeled `privileged`. The router matches the ambiguous observation. It does not receive the reference label.
 
+## Paired evaluation
+
+`POST /api/v1/evaluations` runs the baseline revision and the candidate revision on every case in the cohort manifest. The response binds the manifest hash, fixture version, price book, evaluator, accounting version, and gate policy. A missing case returns 409 `cohort_incomplete` and writes nothing.
+
+`deterministic` is a code replacement. Its method version is `synthetic-code-v1`. It does not read the reference label. Economy and premium remain `synthetic-method-v1`.
+
+Gate policy `gate-policy-v0-fail-closed` stores the execution-cost quotient over `verified_success` only. A zero denominator is null. Modeled labor, infrastructure, and risk are disclosed on the evaluation and are not added into that quotient. Quality and latency stay `not_authoritative` because numerical thresholds are not approved. This policy cannot be stored with `eligible = true`. A request field named `eligible` is rejected.
+
+Results remain synthetic. They are not a real-world equivalence claim.
+
 ## Deferred
 
-Evaluation cohorts, numeric gates, release, verification, restoration, and the Next.js workbench are not in this service.
+Release activation, verification cohorts, restoration, and the Next.js workbench are not in this service. An eligible activation cannot succeed until numerical gate thresholds are approved.

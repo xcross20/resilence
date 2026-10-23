@@ -152,7 +152,7 @@ def _is_unique_violation(exc: IntegrityError) -> bool:
     return getattr(exc.orig, "sqlstate", None) == "23505"
 
 
-def _stored_response(session: Session, idempotency_key: str, body_sha256: str) -> tuple[int, dict] | None:
+def _stored_response(session: Session, idempotency_key: str, body_sha256: str, operation: str) -> tuple[int, dict] | None:
     existing = session.execute(
         text(
             """
@@ -161,7 +161,7 @@ def _stored_response(session: Session, idempotency_key: str, body_sha256: str) -
             WHERE actor = :actor AND operation = :operation AND idempotency_key = :idempotency_key
             """
         ),
-        {"actor": ACTOR, "operation": OPERATION, "idempotency_key": idempotency_key},
+        {"actor": ACTOR, "operation": operation, "idempotency_key": idempotency_key},
     ).mappings().one_or_none()
     if existing is None:
         return None
@@ -173,26 +173,26 @@ def _stored_response(session: Session, idempotency_key: str, body_sha256: str) -
     return existing["status_code"], stored
 
 
-def execute_case(session: Session, body: dict, idempotency_key: str, correlation_id: str) -> tuple[int, dict]:
-    """Persist one run. A concurrent unique conflict replays the committed winner."""
+def run_idempotent(session: Session, *, operation: str, body: dict, idempotency_key: str, work) -> tuple[int, dict]:
+    """Replay a committed winner after SQLSTATE 23505. A second miss stays a 409."""
     body_sha256 = _digest(body)
     try:
-        return _execute_case_once(session, body, idempotency_key, correlation_id)
+        return work()
     except IntegrityError as exc:
         # PostgreSQL aborts the losing transaction. The winner has committed.
         session.rollback()
         if not _is_unique_violation(exc):
             raise
-        stored = _stored_response(session, idempotency_key, body_sha256)
+        stored = _stored_response(session, idempotency_key, body_sha256, operation)
         if stored is not None:
             return stored
         try:
-            return _execute_case_once(session, body, idempotency_key, correlation_id)
+            return work()
         except IntegrityError as retry_exc:
             session.rollback()
             if not _is_unique_violation(retry_exc):
                 raise
-            stored = _stored_response(session, idempotency_key, body_sha256)
+            stored = _stored_response(session, idempotency_key, body_sha256, operation)
             if stored is None:
                 raise ApiError(
                     409,
@@ -202,11 +202,47 @@ def execute_case(session: Session, body: dict, idempotency_key: str, correlation
             return stored
 
 
-def _execute_case_once(session: Session, body: dict, idempotency_key: str, correlation_id: str) -> tuple[int, dict]:
+def execute_case(session: Session, body: dict, idempotency_key: str, correlation_id: str) -> tuple[int, dict]:
+    """Persist one run. A concurrent unique conflict replays the committed winner."""
+    return run_idempotent(
+        session,
+        operation=OPERATION,
+        body=body,
+        idempotency_key=idempotency_key,
+        work=lambda: _execute_case_once(session, body, idempotency_key, correlation_id),
+    )
+
+
+def load_strategy(session: Session, workflow_id: str, revision: str) -> StrategyDocument:
+    return _load_strategy(session, workflow_id, revision)
+
+
+def execute_case_in_transaction(session: Session, body: dict, idempotency_key: str, correlation_id: str) -> tuple[int, dict]:
+    """Insert one run into the caller's transaction. The caller commits and owns idempotency."""
+    return _execute_case_once(
+        session,
+        body,
+        idempotency_key,
+        correlation_id,
+        commit=False,
+        persist_idempotency=False,
+    )
+
+
+def _execute_case_once(
+    session: Session,
+    body: dict,
+    idempotency_key: str,
+    correlation_id: str,
+    *,
+    commit: bool = True,
+    persist_idempotency: bool = True,
+) -> tuple[int, dict]:
     body_sha256 = _digest(body)
-    stored = _stored_response(session, idempotency_key, body_sha256)
-    if stored is not None:
-        return stored
+    if persist_idempotency:
+        stored = _stored_response(session, idempotency_key, body_sha256, OPERATION)
+        if stored is not None:
+            return stored
 
     runtime = fetch_runtime_case(session, body["cohort_id"], body["case_id"])
     if runtime is None or runtime.workflow_id != body["workflow_id"]:
@@ -354,26 +390,28 @@ def _execute_case_once(session: Session, body: dict, idempotency_key: str, corre
         },
     )
     evidence = _evidence(session, run_id)
-    session.execute(
-        text(
-            """
-            INSERT INTO idempotency_key (
-                actor, operation, idempotency_key, body_sha256, status_code, response_json
-            )
-            VALUES (
-                :actor, :operation, :idempotency_key, :body_sha256, 201, CAST(:response_json AS json)
-            )
-            """
-        ),
-        {
-            "actor": ACTOR,
-            "operation": OPERATION,
-            "idempotency_key": idempotency_key,
-            "body_sha256": body_sha256,
-            "response_json": json.dumps(evidence),
-        },
-    )
-    session.commit()
+    if persist_idempotency:
+        session.execute(
+            text(
+                """
+                INSERT INTO idempotency_key (
+                    actor, operation, idempotency_key, body_sha256, status_code, response_json
+                )
+                VALUES (
+                    :actor, :operation, :idempotency_key, :body_sha256, 201, CAST(:response_json AS json)
+                )
+                """
+            ),
+            {
+                "actor": ACTOR,
+                "operation": OPERATION,
+                "idempotency_key": idempotency_key,
+                "body_sha256": body_sha256,
+                "response_json": json.dumps(evidence),
+            },
+        )
+    if commit:
+        session.commit()
     return 201, evidence
 
 

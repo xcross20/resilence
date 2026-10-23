@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-MethodName = Literal["economy", "premium"]
+MethodName = Literal["economy", "premium", "deterministic"]
 KnownCategory = Literal["routine", "ambiguous", "privileged"]
 
 

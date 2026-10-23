@@ -16,6 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def reset_runtime_rows(engine) -> None:
     statements = [
+        "DELETE FROM evaluation_gate",
+        "DELETE FROM evaluation_case",
+        "DELETE FROM evaluation_run",
         "DELETE FROM idempotency_key",
         "DELETE FROM outcome_assessment",
         "DELETE FROM cost_entry",
@@ -23,9 +26,10 @@ def reset_runtime_rows(engine) -> None:
         "DELETE FROM decision_record",
         "DELETE FROM execution_run",
         "DELETE FROM strategy_revision",
-        "DELETE FROM reference_label WHERE case_id <> 'SD-081'",
-        "DELETE FROM classification_observation WHERE case_id <> 'SD-081'",
-        "DELETE FROM case_input WHERE case_id <> 'SD-081'",
+        "DELETE FROM reference_label WHERE cohort_id <> 'acceptance-sd081' OR case_id <> 'SD-081'",
+        "DELETE FROM classification_observation WHERE cohort_id <> 'acceptance-sd081' OR case_id <> 'SD-081'",
+        "DELETE FROM case_input WHERE cohort_id <> 'acceptance-sd081' OR case_id <> 'SD-081'",
+        "DELETE FROM cohort_manifest WHERE cohort_id <> 'acceptance-sd081'",
     ]
     with engine.begin() as connection:
         for statement in statements:
@@ -55,3 +59,4 @@ def client(engine):
     application = create_app(engine)
     with TestClient(application) as test_client:
         yield test_client
+    reset_runtime_rows(engine)

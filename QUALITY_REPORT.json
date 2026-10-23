@@ -1,0 +1,46 @@
+{
+  "milestone": "IMP-002",
+  "builder_status": "READY_FOR_INDEPENDENT_QA",
+  "independent_status": "PENDING",
+  "self_accepted": false,
+  "base_commit": "040d5a9086e6faf54985fd482815588318f0f9a5",
+  "gate_policy_version": "gate-policy-v0-fail-closed",
+  "eligibility_authoritative": false,
+  "uo_001_acceptance": "NOT_CLAIMED",
+  "measurements": [
+    {
+      "name": "full_pytest",
+      "command": "railway run --service Postgres .venv/bin/python -m pytest -q --tb=line",
+      "cwd": "services/api",
+      "exit_code": 0,
+      "passed": 43,
+      "failed": 0,
+      "duration_seconds": 209.37,
+      "warnings": 1
+    },
+    {
+      "name": "evaluation_api_pytest",
+      "command": "railway run --service Postgres .venv/bin/python -m pytest -q tests/test_evaluation_api.py --tb=short",
+      "cwd": "services/api",
+      "exit_code": 0,
+      "passed": 7,
+      "failed": 0,
+      "duration_seconds": 128.81,
+      "warnings": 1
+    },
+    {
+      "name": "domain_pytest",
+      "command": ".venv/bin/python -m pytest -q tests/test_gates.py tests/test_deterministic_method.py --tb=short",
+      "cwd": "services/api",
+      "exit_code": 0,
+      "passed": 11,
+      "failed": 0,
+      "duration_seconds": 0.01,
+      "warnings": 1,
+      "note": "Included again in full_pytest. No database."
+    }
+  ],
+  "frameworks_not_added": ["hypothesis", "testcontainers", "schemathesis", "playwright", "mutmut"],
+  "reason": "The existing pytest suite and Railway Postgres covered the IMP-002 checks. Those frameworks wait for a later slice that needs them.",
+  "limitation": "Synthetic paired results are not statistical proof of real-world model equivalence."
+}

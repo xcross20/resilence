@@ -1,7 +1,8 @@
 {
-  "version": "synthetic-price-v1",
+  "version": "synthetic-price-v2",
   "methods": {
     "economy": {"amount_micro_usd": 8760, "latency_ms": 1700},
-    "premium": {"amount_micro_usd": 19800, "latency_ms": 3000}
+    "premium": {"amount_micro_usd": 19800, "latency_ms": 3000},
+    "deterministic": {"amount_micro_usd": 400, "latency_ms": 40}
   }
 }

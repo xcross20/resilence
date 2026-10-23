@@ -51,7 +51,7 @@ def test_sd081_evidence_chain_keeps_the_label_out_of_the_decision(client, engine
     assert attempt["evidence_origin"] == "synthetic_simulated"
     assert cost["amount_micro_usd"] == 19800
     assert cost["cost_type"] == "execution"
-    assert cost["price_book_version"] == "synthetic-price-v1"
+    assert cost["price_book_version"] == "synthetic-price-v2"
     assert cost["evidence_origin"] == "synthetic_simulated"
     assert assessment["verdict"] == "correct_escalation"
     assert assessment["disposition_correct"] is True
