@@ -1,8 +1,8 @@
 # Release readiness
 
-Final status: **BLOCKED**
+Builder verdict: **READY_FOR_INDEPENDENT_FINAL_QA**
 
-This is not a production release. UO-001 is not accepted. The builder does not accept the user outcome.
+This is not a production release. UO-001 is not accepted. The builder does not accept the user outcome. Synthetic-demo activation is not production authority.
 
 ## Accepted
 
@@ -12,16 +12,17 @@ This is not a production release. UO-001 is not accepted. The builder does not a
 | IMP-002 | Independently accepted | `c35d1c8a1cc6b2d23f5413408224fc32a2c8201d` |
 | IMP-003 | Independently accepted | `f9716cb2f2490213ddd7013feff0e30c1d29a893` |
 
-## Blocked
+## Built for independent review
 
-| Milestone | Why |
+| Slice | Evidence |
 | --- | --- |
-| IMP-004 | The required browser journey includes evaluating an eligible strategy and activating it with confirmation. No approved gate policy can make a strategy eligible. Inventing a margin, a sample size, or a client eligibility flag would change the contract. |
-| IMP-005 | Integrated user-outcome acceptance depends on the workbench journey and on eligible activation. Outcome Verification still has no approved UO-AC commands. |
+| Synthetic-demo activation | Disposable pytest, 40 passed, exit 0, 11.43s. v0 and service-desk stay denied. |
+| IMP-004 workbench | Next.js production build exit 0. Chrome walk activated one stored eligible evaluation and kept `production_authority` false. |
+| IMP-005 manifest | `documents/RE/re-001-acceptance-manifest.json`. UO-AC checks are mapped and not approved for the verifier, because that child receives no database URL. |
 
-## Human decision required
+## Not claimed
 
-Approve a versioned gate policy that names the quality, latency, noninferiority, and minimum-evidence thresholds, or explicitly keep activation denied. Until that policy exists and is added to `APPROVED_ACTIVATION_POLICIES`, IMP-004 must not demonstrate a successful activation.
+Hypothesis, Schemathesis, axe, visual regression, and mutation testing did not run. The browser walk did not execute the 20-case verification cohort. Outcome Verification overall is not PASS.
 
 ## Not done
 

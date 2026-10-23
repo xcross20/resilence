@@ -49,6 +49,8 @@ Gate policy `gate-policy-v0-fail-closed` stores the execution-cost quotient over
 
 `gate-policy-synthetic-demo-v1` judges a separate synthetic workflow, `service-desk-synthetic-demo`. It can store `eligible = true` only from persisted paired evidence under the server runtime scope `synthetic-demo`. `EXECUTION_OPTIMIZER_RUNTIME_SCOPE=production` blocks that policy at evaluation time and again at activation. The setting cannot grant production authority. `APPROVED_ACTIVATION_POLICIES` contains only that demo policy. Activation still requires the demo workflow, synthetic provenance, five passing gates, a stored eligible row, and the confirmation `activate_synthetic_revision`. A `service-desk` or v0 evaluation cannot activate. A committed demo response keeps `production_authority` false. The first activation records the evaluation baseline as the prior revision so a confirmed restore can return to it.
 
+The workbench in `services/web` reads these records. It has Operate, Investigate, Strategies, and Releases. A persistent Synthetic Demo strip stays on every page. The browser does not decide eligibility. Start the API with `uvicorn app.asgi:app` against a disposable database, then run `npm run build` and `npm start` in `services/web` with `EXECUTION_OPTIMIZER_API_URL` pointed at that API.
+
 Results remain synthetic. They are not a real-world equivalence claim.
 
 ## Release

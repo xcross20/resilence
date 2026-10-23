@@ -775,3 +775,41 @@ def test_synthetic_demo_can_activate_verify_and_restore_without_production_autho
     assert workflow.json()["active_policy"]["generation"] == before + 2
     service_desk = client.get("/api/v1/workflows/service-desk")
     assert service_desk.json()["active_policy"] is None
+
+
+def test_workbench_reads_persisted_rows_without_reference_labels(demo_world) -> None:
+    client = demo_world["client"]
+    revisions = demo_world["revisions"]
+    created = _post(
+        client,
+        _body(
+            ACCEPTANCE_COHORT_ID,
+            demo_world["manifests"][ACCEPTANCE_COHORT_ID],
+            revisions["premium"],
+            revisions["economy"],
+            SYNTHETIC_DEMO_POLICY_VERSION,
+        ),
+        "demo-eligible",
+    )
+    assert created.status_code == 201, created.text
+    evaluation_id = created.json()["evaluation_id"]
+    listed = client.get("/api/v1/evaluations", params={"workflow_id": DEMO_WORKFLOW_ID, "eligible": "true"})
+    assert listed.status_code == 200, listed.text
+    payload = listed.json()
+    matched = [item for item in payload["evaluations"] if item["evaluation_id"] == evaluation_id]
+    assert len(matched) == 1
+    assert matched[0]["eligible"] is True
+    assert matched[0]["eligibility_authoritative"] is True
+    assert matched[0]["production_authority"] is False
+    assert matched[0]["economics"]["candidate"]["execution_cost_micro_usd"] > 0
+    assert "reference_category" not in listed.text
+    stored = client.get("/api/v1/strategies/revisions", params={"workflow_id": DEMO_WORKFLOW_ID})
+    assert stored.status_code == 200, stored.text
+    assert {item["revision_sha256"] for item in stored.json()["revisions"]} >= set(revisions.values())
+    assert "reference_category" not in stored.text
+    cases = client.get(f"/api/v1/evaluations/{evaluation_id}/cases", params={"limit": 5})
+    assert cases.status_code == 200, cases.text
+    assert "reference_category" not in cases.text
+    assert cases.json()["cases"][0]["observed_category"] == "routine"
+    missing = client.get("/api/v1/evaluations", params={"workflow_id": "missing-workflow"})
+    assert missing.status_code == 404

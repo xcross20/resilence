@@ -8,7 +8,7 @@
 - A recorded regression does not move the active pointer and does not restore the prior revision by itself.
 - `runtime_case_v` is an application allowlist. The database owner can still read `reference_label`.
 - All execution, assessment, and modeled-cost figures in this branch are synthetic. They are not a statistical proof of real-world model equivalence and they are not a savings claim.
-- The approved v0.6.4 workbench is not connected to this API. Operate, Investigate, Strategies, and Releases are not browser-verified against persisted records.
+- The workbench reads persisted demo records and keeps a Synthetic Demo strip on every page. It does not grant eligibility. Hypothesis, Schemathesis, axe, visual regression, and mutation testing are not installed. The browser walk did not itself run the 20-case verification cohort.
 - Outcome Verification cannot mark UO-001 PASS until approved commands are mapped to UO-AC-01 through UO-AC-10. Editing the skill manifest to approve the Railway suite was not done.
 - `--unattended` container execution is unavailable here. The local `python:3.12-alpine` image is absent, and it was not pulled. Supervised process-group runs were used instead.
 - One Starlette `httpx` deprecation warning remains. It did not fail a test.

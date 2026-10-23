@@ -7,9 +7,18 @@ from pydantic import ValidationError
 from app.db.session import session_for
 from app.domain.strategy import StrategyDocument
 from app.services.errors import ApiError
-from app.services.run_case import store_revision
+from app.services.run_case import read_revisions, store_revision
 
 router = APIRouter()
+
+
+@router.get("/api/v1/strategies/revisions")
+def get_revisions(workflow_id: str, request: Request):
+    session = session_for(request)
+    try:
+        return read_revisions(session, workflow_id)
+    finally:
+        session.close()
 
 
 @router.post("/api/v1/strategies/revisions")

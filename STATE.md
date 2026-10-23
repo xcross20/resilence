@@ -1,19 +1,11 @@
 # State
 
-disposition: CONTINUE
+Branch `feat/imp-001-evidence-foundation`.
 
-- IMP-001 accepted at `040d5a9086e6faf54985fd482815588318f0f9a5`.
-- IMP-002 accepted at `c35d1c8a1cc6b2d23f5413408224fc32a2c8201d`.
-- IMP-003 accepted at `f9716cb2f2490213ddd7013feff0e30c1d29a893`.
-- P0 calculator `92b1ded9dbcdf216ae3f9113d2b70b7c877f5c2f` judges the demo policy in memory.
-- P0 persistence slice stores an eligible synthetic-demo evaluation on workflow `service-desk-synthetic-demo`. Activation is still denied.
-- IMP-004 has not started. UO-001 is not accepted.
-- Railway networking was not changed. The new database tests did not use Railway. No merge and no deploy.
+Accepted product remains IMP-001 `040d5a9`, IMP-002 `c35d1c8`, IMP-003 `f9716cb`. Stop record `4c2223a`. Calculator `92b1ded`. Persistence `58c5baf`. Demo activation `8134544`.
 
-## Slice sensor
+The workbench and the project acceptance manifest are in the commit that adds this file's current text.
 
-Command, from `services/api`, against disposable Postgres `127.0.0.1:54329`:
+Builder verdict: READY_FOR_INDEPENDENT_FINAL_QA. UO-001 is not accepted. Outcome verification overall stays INCONCLUSIVE until its own approved database-backed commands run. No merge and no deploy.
 
-`DISPOSABLE_DATABASE_URL=postgresql+psycopg://demo:demo@127.0.0.1:54329/demo .venv/bin/python -m pytest -q tests/test_gates.py tests/test_synthetic_demo_policy.py tests/test_synthetic_demo_evaluation.py tests/test_release_policy.py --tb=short`
-
-Exit code 0. 37 passed. 1 warning. 9.49 seconds.
+The local disposable Postgres used for the sensor is not Railway. The browser walk later activated the demo pointer on that same database, so that database is no longer the clean sensor snapshot.

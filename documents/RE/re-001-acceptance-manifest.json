@@ -1,0 +1,215 @@
+{
+  "schema_version": "1",
+  "contract_id": "UO-001",
+  "contract_version": "2026-10-21",
+  "target_repo": "xcross20/resilence",
+  "fixtures": [
+    "services/api/app/fixtures/service_desk_v1/price_book.json",
+    "services/api/app/fixtures/synthetic_demo_v1.py"
+  ],
+  "requirements": [
+    {
+      "id": "UO-AC-01",
+      "gates_contract": true,
+      "critical": true,
+      "description": "The user can inspect step-level execution strategy and attributable cost.",
+      "evidence_expectation": "An operator read of persisted step, method, and cost records.",
+      "checks": [
+        {
+          "id": "uo-ac-01-workbench-read",
+          "approved": false,
+          "runnable": false,
+          "note": "The workbench reads stored revisions and evaluation cases. The outcome-verification child does not receive a database URL, so this check is not executable there. Builder evidence is the disposable pytest and the Chrome walk.",
+          "command_preview": ["{python}", "-m", "pytest", "-q", "tests/test_synthetic_demo_evaluation.py::test_workbench_reads_persisted_rows_without_reference_labels"]
+        }
+      ]
+    },
+    {
+      "id": "UO-AC-02",
+      "gates_contract": true,
+      "critical": true,
+      "description": "At least one candidate changes model selection based on task requirements.",
+      "evidence_expectation": "A candidate revision whose routed method differs from baseline on the same observed category.",
+      "checks": [
+        {
+          "id": "uo-ac-02-paired-routes",
+          "approved": false,
+          "runnable": false,
+          "note": "Stored economy and premium revisions route observed categories differently. Not run inside outcome verification because the database URL is not passed to the child.",
+          "command_preview": ["{python}", "-m", "pytest", "-q", "tests/test_synthetic_demo_evaluation.py::test_eligible_demo_evaluation_is_persisted_from_execution_records"]
+        }
+      ]
+    },
+    {
+      "id": "UO-AC-03",
+      "gates_contract": true,
+      "critical": true,
+      "description": "At least one candidate uses deterministic execution instead of an unnecessary LLM call.",
+      "evidence_expectation": "A persisted deterministic attempt. The demo acceptance candidate uses economy, not deterministic. Deterministic replacement is covered by the deterministic method tests and is a quality regression on the acceptance cohort.",
+      "checks": [
+        {
+          "id": "uo-ac-03-deterministic",
+          "approved": false,
+          "runnable": false,
+          "note": "tests/test_deterministic_method.py does not need a database. It is not approved here because a method unit test is not the operator outcome. The paired deterministic candidate is in the disposable evaluation test.",
+          "command_preview": ["{python}", "-m", "pytest", "-q", "tests/test_deterministic_method.py"]
+        }
+      ]
+    },
+    {
+      "id": "UO-AC-04",
+      "gates_contract": true,
+      "critical": true,
+      "description": "Baseline and candidate are compared on equivalent, versioned evaluation cases.",
+      "evidence_expectation": "Paired case rows bound to one cohort manifest.",
+      "checks": [
+        {
+          "id": "uo-ac-04-paired-cohort",
+          "approved": false,
+          "runnable": false,
+          "note": "Disposable pytest covers the paired cohort. The verifier child has no database URL.",
+          "command_preview": ["{python}", "-m", "pytest", "-q", "tests/test_synthetic_demo_evaluation.py"]
+        }
+      ]
+    },
+    {
+      "id": "UO-AC-05",
+      "gates_contract": true,
+      "critical": true,
+      "description": "Cost per verified successful outcome is computed from execution and evaluation records.",
+      "evidence_expectation": "The quotient is recomputed from persisted costs and verified-success counts.",
+      "checks": [
+        {
+          "id": "uo-ac-05-cost-ratio",
+          "approved": false,
+          "runnable": false,
+          "note": "The pure gate tests cover the rational comparison. They are not approved as this user outcome because they do not read the database.",
+          "command_preview": ["{python}", "-m", "pytest", "-q", "tests/test_synthetic_demo_policy.py"]
+        }
+      ]
+    },
+    {
+      "id": "UO-AC-06",
+      "gates_contract": true,
+      "critical": true,
+      "description": "Individual quality failures and policy violations are inspectable.",
+      "evidence_expectation": "A case read model shows verdict, reason, and critical-violation flag, without a reference category.",
+      "checks": [
+        {
+          "id": "uo-ac-06-case-read",
+          "approved": false,
+          "runnable": false,
+          "note": "GET evaluation cases returns verdicts and observed category. reference_category is absent. Needs the disposable database.",
+          "command_preview": ["{python}", "-m", "pytest", "-q", "tests/test_synthetic_demo_evaluation.py::test_workbench_reads_persisted_rows_without_reference_labels"]
+        }
+      ]
+    },
+    {
+      "id": "UO-AC-07",
+      "gates_contract": true,
+      "critical": true,
+      "description": "A failing or inconclusive candidate cannot be activated as approved.",
+      "evidence_expectation": "Activation of a blocked, ineligible, v0, forged, or production-scoped request leaves the pointer unchanged.",
+      "checks": [
+        {
+          "id": "uo-ac-07-denials",
+          "approved": false,
+          "runnable": false,
+          "note": "Covered by test_synthetic_demo_can_activate_verify_and_restore_without_production_authority on a disposable database. The verifier does not receive that URL.",
+          "command_preview": ["{python}", "-m", "pytest", "-q", "tests/test_synthetic_demo_evaluation.py::test_synthetic_demo_can_activate_verify_and_restore_without_production_authority", "tests/test_release_policy.py"]
+        }
+      ]
+    },
+    {
+      "id": "UO-AC-08",
+      "gates_contract": true,
+      "critical": true,
+      "description": "Eligible policy activation and restoration work in the demo and leave an audit trail.",
+      "evidence_expectation": "Compare-and-swap activation, a verification record, and an explicit restore.",
+      "checks": [
+        {
+          "id": "uo-ac-08-activate-verify-restore",
+          "approved": false,
+          "runnable": false,
+          "note": "The same disposable test activates, verifies the disjoint cohort, and restores the compared baseline. It is not an outcome-verification PASS.",
+          "command_preview": ["{python}", "-m", "pytest", "-q", "tests/test_synthetic_demo_evaluation.py::test_synthetic_demo_can_activate_verify_and_restore_without_production_authority"]
+        }
+      ]
+    },
+    {
+      "id": "UO-AC-09",
+      "gates_contract": true,
+      "critical": true,
+      "description": "The basic demonstration runs without enterprise credentials or services.",
+      "evidence_expectation": "Local synthetic execution and a disposable Postgres. No live provider.",
+      "checks": [
+        {
+          "id": "uo-ac-09-local-demo",
+          "approved": false,
+          "runnable": false,
+          "note": "The demonstration uses a local Postgres container and synthetic prices. Railway was not used for this slice.",
+          "command_preview": ["{python}", "-m", "pytest", "-q", "tests/test_synthetic_demo_evaluation.py"]
+        }
+      ]
+    },
+    {
+      "id": "UO-AC-10",
+      "gates_contract": true,
+      "critical": true,
+      "description": "Simulated, replayed, estimated, and live-measured evidence are explicitly distinguished.",
+      "evidence_expectation": "Attempt origin, label origin, and modeled origin stay distinct. Replay is not provider-measured.",
+      "checks": [
+        {
+          "id": "uo-ac-10-origins",
+          "approved": false,
+          "runnable": false,
+          "note": "Persisted attempts use synthetic_simulated. Modeled allocations use synthetic_modeled and are excluded from the quotient. Live-provider attempts block activation.",
+          "command_preview": ["{python}", "-m", "pytest", "-q", "tests/test_release_policy.py::test_synthetic_demo_activation_requires_server_provenance"]
+        }
+      ]
+    },
+    {
+      "id": "DEMO-JUDGMENT",
+      "gates_contract": false,
+      "description": "Pure synthetic-demo and v0 judgment tests. These do not accept UO-001.",
+      "evidence_expectation": "pytest exit 0 without a database.",
+      "checks": [
+        {
+          "id": "demo-judgment-unit",
+          "approved": true,
+          "runnable": true,
+          "cwd": "services/api",
+          "timeout_seconds": 120,
+          "tier": "fast",
+          "tools": ["pytest"],
+          "argv": ["{python}", "-m", "pytest", "-p", "no:cacheprovider", "-q", "tests/test_gates.py", "tests/test_synthetic_demo_policy.py", "tests/test_release_policy.py"]
+        }
+      ]
+    },
+    {
+      "id": "IMP-004",
+      "gates_contract": false,
+      "description": "Four workbench destinations bound to persisted records.",
+      "evidence_expectation": "A browser walk of Operate, Investigate, Strategies, and Releases against the API.",
+      "plan": {
+        "product_slice": "IMP-004",
+        "tools": ["playwright-core", "chrome"],
+        "blocked_reason": "The journey needs a running API, a running Next server, and system Chrome. The outcome-verification child does not start those processes.",
+        "command_preview": ["node", "scripts/walk.mjs"]
+      },
+      "checks": []
+    },
+    {
+      "id": "IMP-005",
+      "gates_contract": false,
+      "description": "Integrated acceptance beyond the mapped checks.",
+      "evidence_expectation": "Hypothesis, Schemathesis, accessibility, visual regression, and mutation runs are not installed.",
+      "plan": {
+        "verification_overlay": true,
+        "dependencies_not_added": ["hypothesis", "schemathesis", "mutmut", "@axe-core/playwright"],
+        "blocked_reason": "Those tools were not added. Their absence is not a PASS."
+      },
+      "checks": []
+    }
+  ]
+}

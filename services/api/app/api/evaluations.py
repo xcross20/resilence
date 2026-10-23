@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.session import session_for
 from app.services.errors import ApiError
-from app.services.evaluation import read_evaluation, read_evaluation_cases, start_evaluation
+from app.services.evaluation import read_evaluation, read_evaluation_cases, read_evaluations, start_evaluation
 
 router = APIRouter()
 
@@ -40,6 +40,15 @@ def post_evaluation(
     try:
         status, payload = start_evaluation(session, body.model_dump(), key, request.state.correlation_id)
         return JSONResponse(status_code=status, content=payload)
+    finally:
+        session.close()
+
+
+@router.get("/api/v1/evaluations")
+def get_evaluations(workflow_id: str, request: Request):
+    session = session_for(request)
+    try:
+        return read_evaluations(session, workflow_id)
     finally:
         session.close()
 

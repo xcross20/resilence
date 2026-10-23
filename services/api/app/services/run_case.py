@@ -428,6 +428,39 @@ def read_evidence(session: Session, run_id: str) -> dict:
     return _evidence(session, run_id)
 
 
+def read_revisions(session: Session, workflow_id: str) -> dict:
+    row = session.execute(
+        text("SELECT workflow_id FROM workflow_definition WHERE workflow_id = :workflow_id"),
+        {"workflow_id": workflow_id},
+    ).one_or_none()
+    if row is None:
+        raise ApiError(404, "workflow_not_found", "Workflow does not exist")
+    stored = session.execute(
+        text(
+            """
+            SELECT revision_sha256, schema_version, canonical_json
+            FROM strategy_revision
+            WHERE workflow_id = :workflow_id
+            ORDER BY revision_sha256
+            """
+        ),
+        {"workflow_id": workflow_id},
+    ).mappings().all()
+    revisions = []
+    for item in stored:
+        document = item["canonical_json"]
+        if isinstance(document, str):
+            document = json.loads(document)
+        revisions.append(
+            {
+                "revision_sha256": item["revision_sha256"],
+                "schema_version": item["schema_version"],
+                "document": document,
+            }
+        )
+    return {"workflow_id": workflow_id, "revisions": revisions}
+
+
 def store_revision(session: Session, document: StrategyDocument) -> tuple[int, dict]:
     revision = revision_sha256(document)
     canonical = canonical_json(document)

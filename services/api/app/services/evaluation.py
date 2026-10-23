@@ -530,6 +530,85 @@ def read_evaluation(session: Session, evaluation_id: str) -> dict:
     return _load_response(session, evaluation_id)
 
 
+def _require_workflow(session: Session, workflow_id: str) -> None:
+    row = session.execute(
+        text("SELECT workflow_id FROM workflow_definition WHERE workflow_id = :workflow_id"),
+        {"workflow_id": workflow_id},
+    ).one_or_none()
+    if row is None:
+        raise ApiError(404, "workflow_not_found", "Workflow does not exist")
+
+
+def read_evaluations(session: Session, workflow_id: str) -> dict:
+    """Return stored evaluations. The query string cannot mark a row eligible."""
+    _require_workflow(session, workflow_id)
+    rows = session.execute(
+        text(
+            """
+            SELECT evaluation_id, cohort_id, status, eligible, gate_policy_version,
+                   baseline_revision, candidate_revision, case_count, created_at,
+                   baseline_verified_success_count, candidate_verified_success_count,
+                   baseline_execution_cost_micro_usd, candidate_execution_cost_micro_usd,
+                   baseline_quotient_micro_usd, candidate_quotient_micro_usd
+            FROM evaluation_run
+            WHERE workflow_id = :workflow_id
+            ORDER BY created_at, evaluation_id
+            """
+        ),
+        {"workflow_id": workflow_id},
+    ).mappings().all()
+    gates = session.execute(
+        text(
+            """
+            SELECT gate.evaluation_id, gate.gate_id, gate.status, gate.reason_code
+            FROM evaluation_gate AS gate
+            JOIN evaluation_run AS evaluation ON evaluation.evaluation_id = gate.evaluation_id
+            WHERE evaluation.workflow_id = :workflow_id
+            ORDER BY gate.evaluation_id, gate.gate_id
+            """
+        ),
+        {"workflow_id": workflow_id},
+    ).mappings().all()
+    by_evaluation: dict[str, list[dict]] = {}
+    for gate in gates:
+        by_evaluation.setdefault(gate["evaluation_id"], []).append(
+            {"gate_id": gate["gate_id"], "status": gate["status"], "reason_code": gate["reason_code"]}
+        )
+    evaluations = []
+    for row in rows:
+        evaluations.append(
+            {
+                "evaluation_id": row["evaluation_id"],
+                "cohort_id": row["cohort_id"],
+                "status": row["status"],
+                "eligible": row["eligible"],
+                "eligibility_authoritative": (
+                    row["gate_policy_version"] == SYNTHETIC_DEMO_POLICY_VERSION and bool(row["eligible"])
+                ),
+                "production_authority": False,
+                "gate_policy_version": row["gate_policy_version"],
+                "baseline_revision": row["baseline_revision"],
+                "candidate_revision": row["candidate_revision"],
+                "case_count": row["case_count"],
+                "created_at": _iso(row["created_at"]),
+                "economics": {
+                    "baseline": {
+                        "verified_success_count": row["baseline_verified_success_count"],
+                        "execution_cost_micro_usd": row["baseline_execution_cost_micro_usd"],
+                        "cost_per_verified_success_micro_usd": row["baseline_quotient_micro_usd"],
+                    },
+                    "candidate": {
+                        "verified_success_count": row["candidate_verified_success_count"],
+                        "execution_cost_micro_usd": row["candidate_execution_cost_micro_usd"],
+                        "cost_per_verified_success_micro_usd": row["candidate_quotient_micro_usd"],
+                    },
+                },
+                "gates": by_evaluation.get(row["evaluation_id"], []),
+            }
+        )
+    return {"workflow_id": workflow_id, "evaluations": evaluations}
+
+
 def read_evaluation_cases(session: Session, evaluation_id: str, limit: int, offset: int) -> dict:
     if limit < 1 or limit > 100 or offset < 0:
         raise ApiError(422, "validation_error", "limit must be 1..100 and offset must be non-negative")
@@ -542,16 +621,20 @@ def read_evaluation_cases(session: Session, evaluation_id: str, limit: int, offs
     rows = session.execute(
         text(
             """
-            SELECT case_id, case_ordinal, baseline_run_id, candidate_run_id,
-                   baseline_assessment_id, candidate_assessment_id, route_changed, verdict_changed,
-                   execution_cost_delta_micro_usd, first_divergent_decision_id,
+            SELECT pair.case_id, pair.case_ordinal, pair.baseline_run_id, pair.candidate_run_id,
+                   pair.baseline_assessment_id, pair.candidate_assessment_id, pair.route_changed,
+                   pair.verdict_changed, pair.execution_cost_delta_micro_usd, pair.first_divergent_decision_id,
                    b.verdict AS baseline_verdict, b.critical_violation AS baseline_critical_violation,
                    b.reason_code AS baseline_reason_code,
                    c.verdict AS candidate_verdict, c.critical_violation AS candidate_critical_violation,
-                   c.reason_code AS candidate_reason_code
+                   c.reason_code AS candidate_reason_code,
+                   observation.observed_category, observation.confidence_bps, observation.evidence_origin
             FROM evaluation_case AS pair
+            JOIN evaluation_run AS evaluation ON evaluation.evaluation_id = pair.evaluation_id
             JOIN outcome_assessment AS b ON b.assessment_id = pair.baseline_assessment_id
             JOIN outcome_assessment AS c ON c.assessment_id = pair.candidate_assessment_id
+            LEFT JOIN classification_observation AS observation
+              ON observation.cohort_id = evaluation.cohort_id AND observation.case_id = pair.case_id
             WHERE pair.evaluation_id = :evaluation_id
             ORDER BY pair.case_ordinal
             LIMIT :limit OFFSET :offset
