@@ -2,7 +2,7 @@
   "milestone": "RE-001-COMPLETE-001",
   "disposition": "CONTINUE",
   "final_status": "BLOCKED",
-  "builder_status": "P0_CALCULATOR_ONLY",
+  "builder_status": "P0_PERSISTED_NOT_ACTIVATED",
   "independent_status": "IMP-003_ACCEPTED_DEMO_POLICY_NOT_ACTIVATED",
   "self_accepted": false,
   "uo_001_acceptance": "NOT_CLAIMED",
@@ -61,6 +61,17 @@
   "holdout_claims_approved": false,
   "measurements": [
     {
+      "name": "p0_demo_policy_persisted",
+      "command": "DISPOSABLE_DATABASE_URL=postgresql+psycopg://demo:demo@127.0.0.1:54329/demo .venv/bin/python -m pytest -q tests/test_gates.py tests/test_synthetic_demo_policy.py tests/test_synthetic_demo_evaluation.py tests/test_release_policy.py --tb=short",
+      "cwd": "services/api",
+      "exit_code": 0,
+      "passed": 37,
+      "failed": 0,
+      "duration_seconds": 9.49,
+      "warnings": 1,
+      "database": "disposable_local_postgres"
+    },
+    {
       "name": "p0_demo_policy_unit",
       "command": ".venv/bin/python -m pytest -q tests/test_gates.py tests/test_synthetic_demo_policy.py tests/test_release_policy.py --tb=short",
       "cwd": "services/api",
@@ -93,6 +104,6 @@
     }
   ],
   "frameworks_not_added": ["hypothesis", "testcontainers", "schemathesis", "playwright", "mutmut"],
-  "reason": "RE-001-COMPLETE-001 authorizes gate-policy-synthetic-demo-v1 for a synthetic demonstration. This slice implements the calculator only. Activation stays denied until the server runtime boundary is enforced.",
+  "reason": "The synthetic-demo policy now persists eligibility from paired execution records on an isolated workflow. Activation stays denied until the release path enforces the server runtime boundary.",
   "limitation": "Synthetic results are not statistical proof of real-world model equivalence. The demo policy is not production authority and is not yet an activation policy."
 }

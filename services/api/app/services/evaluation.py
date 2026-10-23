@@ -14,9 +14,17 @@ from app.domain.gates import (
     MODELED_ORIGIN,
     MODELED_RISK_MICRO_USD,
     PRIMARY_LIMITATION,
+    SYNTHETIC_DEMO_POLICY_VERSION,
+    SYNTHETIC_EVIDENCE_ORIGIN,
+    SYNTHETIC_LABEL_ORIGIN,
+    DemoCase,
+    DemoCohortEvidence,
+    GateJudgment,
     execution_cost_per_verified_success,
     judge_gates,
+    judge_synthetic_demo_gates,
 )
+from app.domain.runtime_scope import server_runtime_scope
 from app.domain.ids import stable_id
 from app.domain.pricing import load_price_book
 from app.services.errors import ApiError
@@ -145,7 +153,10 @@ def _load_response(session: Session, evaluation_id: str) -> dict:
         "cohort_id": row["cohort_id"],
         "status": row["status"],
         "eligible": row["eligible"],
-        "eligibility_authoritative": row["gate_policy_version"] != GATE_POLICY_VERSION,
+        "eligibility_authoritative": (
+            row["gate_policy_version"] == SYNTHETIC_DEMO_POLICY_VERSION and bool(row["eligible"])
+        ),
+        "production_authority": False,
         "baseline_revision": row["baseline_revision"],
         "candidate_revision": row["candidate_revision"],
         "case_count": row["case_count"],
@@ -162,6 +173,7 @@ def _load_response(session: Session, evaluation_id: str) -> dict:
             "execution_evidence_origin": "synthetic_simulated",
             "label_origin": "synthetic_rubric",
             "modeled_allocation_origin": row["modeled_origin"],
+            "runtime_scope": server_runtime_scope(),
             "limitation": PRIMARY_LIMITATION,
         },
         "economics": {
@@ -191,6 +203,82 @@ def _load_response(session: Session, evaluation_id: str) -> dict:
     }
 
 
+def _origin_or_expected(values: list[str], expected: str) -> str:
+    foreign = [item for item in values if item != expected]
+    return foreign[0] if foreign else expected
+
+
+def _demo_case(case_id: str, evidence: dict, price_book_version: str) -> DemoCase:
+    attempts = evidence["attempts"]
+    costs = evidence["costs"]
+    label = evidence["reference_label"]
+    assessment = evidence["assessment"]
+    return DemoCase(
+        case_id=case_id,
+        verdict=str(assessment["verdict"]),
+        reason_code=str(assessment["reason_code"]),
+        critical_violation=bool(assessment["critical_violation"]),
+        escalation_required=label is not None and label["expected_disposition"] == "escalated",
+        latency_ms=sum(int(item["simulated_latency_ms"]) for item in attempts) if attempts else None,
+        execution_cost_micro_usd=sum(int(item["amount_micro_usd"]) for item in costs) if costs else None,
+        price_ok=_prices_match(evidence, price_book_version),
+        assessment_present=True,
+    )
+
+
+def _demo_evidence(cohort: dict, pairs: list[tuple[dict, dict]], price_book_version: str) -> DemoCohortEvidence:
+    baseline = tuple(_demo_case(case_id, pair[0], price_book_version) for case_id, pair in zip(cohort["case_ids"], pairs, strict=True))
+    candidate = tuple(_demo_case(case_id, pair[1], price_book_version) for case_id, pair in zip(cohort["case_ids"], pairs, strict=True))
+    attempt_origins = [
+        str(attempt["evidence_origin"])
+        for pair in pairs
+        for evidence in pair
+        for attempt in evidence["attempts"]
+    ]
+    label_origins = [
+        str(evidence["reference_label"]["label_origin"])
+        for pair in pairs
+        for evidence in pair
+        if evidence["reference_label"] is not None
+    ]
+    live_provider_attempt_count = sum(1 for origin in attempt_origins if origin != SYNTHETIC_EVIDENCE_ORIGIN)
+    return DemoCohortEvidence(
+        manifest_case_ids=tuple(cohort["case_ids"]),
+        baseline=baseline,
+        candidate=candidate,
+        evidence_origin=_origin_or_expected(attempt_origins, SYNTHETIC_EVIDENCE_ORIGIN),
+        label_origin=_origin_or_expected(label_origins, SYNTHETIC_LABEL_ORIGIN),
+        runtime_scope=server_runtime_scope(),
+        live_provider_attempt_count=live_provider_attempt_count,
+    )
+
+
+def _judge_persisted(
+    body: dict,
+    cohort: dict,
+    pairs: list[tuple[dict, dict]],
+    *,
+    any_inconclusive: bool,
+    candidate_critical_violations: int,
+    candidate_verified_success_count: int,
+    prices_match: bool,
+) -> GateJudgment:
+    policy = body["expected_gate_policy_version"]
+    if policy == GATE_POLICY_VERSION:
+        return judge_gates(
+            case_count=len(cohort["case_ids"]),
+            pair_count=len(pairs),
+            manifest_matches=True,
+            any_inconclusive=any_inconclusive,
+            candidate_critical_violations=candidate_critical_violations,
+            candidate_verified_success_count=candidate_verified_success_count,
+            prices_match=prices_match,
+        )
+    if policy == SYNTHETIC_DEMO_POLICY_VERSION:
+        return judge_synthetic_demo_gates(_demo_evidence(cohort, pairs, body["expected_price_book_version"]))
+    raise ApiError(409, "version_mismatch", "Evaluation version binding does not match stored evidence")
+
+
 def _insert_evaluation(session: Session, evaluation_id: str, body: dict, cohort: dict, pairs: list[tuple[dict, dict]], correlation_id: str) -> dict:
     baseline_cost = sum(_sum_cost(baseline) for baseline, _candidate in pairs)
     candidate_cost = sum(_sum_cost(candidate) for _baseline, candidate in pairs)
@@ -205,10 +293,10 @@ def _insert_evaluation(session: Session, evaluation_id: str, body: dict, cohort:
         for evidence in pair
     )
     any_inconclusive = any(evidence["assessment"]["verdict"] == "inconclusive" for pair in pairs for evidence in pair)
-    judgment = judge_gates(
-        case_count=len(cohort["case_ids"]),
-        pair_count=len(pairs),
-        manifest_matches=True,
+    judgment = _judge_persisted(
+        body,
+        cohort,
+        pairs,
         any_inconclusive=any_inconclusive,
         candidate_critical_violations=candidate_critical,
         candidate_verified_success_count=candidate_verified,
@@ -340,7 +428,17 @@ def _start_evaluation_once(session: Session, body: dict, idempotency_key: str, c
     _version_mismatch("expected_price_book_version", body["expected_price_book_version"], load_price_book()["version"])
     _version_mismatch("expected_evaluator_version", body["expected_evaluator_version"], EVALUATOR_VERSION)
     _version_mismatch("expected_accounting_version", body["expected_accounting_version"], ACCOUNTING_VERSION)
-    _version_mismatch("expected_gate_policy_version", body["expected_gate_policy_version"], GATE_POLICY_VERSION)
+    if body["expected_gate_policy_version"] not in {GATE_POLICY_VERSION, SYNTHETIC_DEMO_POLICY_VERSION}:
+        raise ApiError(
+            409,
+            "version_mismatch",
+            "Evaluation version binding does not match stored evidence",
+            {
+                "field": "expected_gate_policy_version",
+                "expected": f"{GATE_POLICY_VERSION}|{SYNTHETIC_DEMO_POLICY_VERSION}",
+                "actual": body["expected_gate_policy_version"],
+            },
+        )
     load_strategy(session, body["workflow_id"], body["baseline_revision"])
     load_strategy(session, body["workflow_id"], body["candidate_revision"])
     missing = [

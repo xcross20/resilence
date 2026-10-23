@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 MethodName = Literal["economy", "premium", "deterministic"]
 KnownCategory = Literal["routine", "ambiguous", "privileged"]
+WorkflowId = Literal["service-desk", "service-desk-synthetic-demo"]
 
 
 class RuleWhen(BaseModel):
@@ -33,7 +34,7 @@ class StrategyDocument(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     schema_version: Literal["1"]
-    workflow_id: Literal["service-desk"]
+    workflow_id: WorkflowId
     rules: list[PolicyRule]
     default_method: MethodName
     fallback_method: MethodName

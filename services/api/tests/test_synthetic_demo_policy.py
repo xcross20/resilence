@@ -14,7 +14,9 @@ from app.domain.gates import (
     nearest_rank_p95_ms,
     rational_cost_is_strictly_lower,
 )
+from app.domain.demo_execution import fail_methods_for
 from app.domain.release import APPROVED_ACTIVATION_POLICIES
+from app.domain.runtime_scope import server_runtime_scope
 
 
 def _case(case_id: str, **overrides) -> DemoCase:
@@ -72,6 +74,17 @@ def _cohort(n: int = 100, **overrides) -> DemoCohortEvidence:
 def _gate(evidence: DemoCohortEvidence, gate_id: str):
     judgment = judge_synthetic_demo_gates(evidence)
     return judgment, {gate.gate_id: gate for gate in judgment.gates}[gate_id]
+
+
+def test_fail_first_hook_is_only_the_named_economy_case() -> None:
+    assert fail_methods_for("SYN-D-000", "economy") == frozenset({"economy"})
+    assert fail_methods_for("SYN-D-000", "premium") == frozenset()
+    assert fail_methods_for("SD-081", "economy") == frozenset()
+
+
+def test_unset_runtime_scope_stays_synthetic_demo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("EXECUTION_OPTIMIZER_RUNTIME_SCOPE", raising=False)
+    assert server_runtime_scope() == "synthetic-demo"
 
 
 def test_nearest_rank_p95_uses_ceil_without_interpolation() -> None:

@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 from app.db.label_reader import fetch_reference_label
 from app.db.runtime_reader import fetch_runtime_case
 from app.domain.assessment import assess_outcome
+from app.domain.demo_execution import fail_methods_for
 from app.domain.execution import execute_observed
 from app.domain.ids import stable_id
-from app.domain.routing import STEP_ID
+from app.domain.routing import STEP_ID, route_observed
 from app.domain.strategy import StrategyDocument, canonical_json, revision_sha256
 from app.services.errors import ApiError
 
@@ -248,7 +249,12 @@ def _execute_case_once(
     if runtime is None or runtime.workflow_id != body["workflow_id"]:
         raise ApiError(404, "case_not_found", "Case is not in the requested workflow cohort")
     document = _load_strategy(session, body["workflow_id"], body["revision_sha256"])
-    trace = execute_observed(document, runtime.observed_category)
+    selected = route_observed(document, runtime.observed_category)
+    trace = execute_observed(
+        document,
+        runtime.observed_category,
+        fail_methods=fail_methods_for(runtime.case_id, selected.selected_method),
+    )
     expectation = fetch_reference_label(session, runtime.cohort_id, runtime.case_id)
     final = trace.final_attempt
     verdict = assess_outcome(

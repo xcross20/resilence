@@ -2,14 +2,14 @@
 
 Milestone: P0 synthetic-demo gate policy.
 
-Completed slice: pure `gate-policy-synthetic-demo-v1` judgment. It is not activation authority. `APPROVED_ACTIVATION_POLICIES` is still empty. v0 is unchanged.
+Completed slice: persist `gate-policy-synthetic-demo-v1` for workflow `service-desk-synthetic-demo` on a disposable Postgres. One 100-case cohort stores `eligible=true` from execution records. Ineligible cohorts, v0, a forged body, and a production runtime stay ineligible. `APPROVED_ACTIVATION_POLICIES` is still empty.
 
-Sensor, from `services/api`, no database:
+Sensor, from `services/api`:
 
-`.venv/bin/python -m pytest -q tests/test_gates.py tests/test_synthetic_demo_policy.py tests/test_release_policy.py --tb=short`
+`DISPOSABLE_DATABASE_URL=postgresql+psycopg://demo:demo@127.0.0.1:54329/demo .venv/bin/python -m pytest -q tests/test_gates.py tests/test_synthetic_demo_policy.py tests/test_synthetic_demo_evaluation.py tests/test_release_policy.py --tb=short`
 
-Exit code 0. 29 passed. 1 Starlette httpx deprecation warning. 0.03 seconds.
+Exit code 0. 37 passed. 1 Starlette httpx deprecation warning. 9.49 seconds. The database was a local disposable Postgres, not Railway.
 
-Next slice: persist this policy through paired evaluation on a disposable database, including a deterministic 100-case fixture and one eligible plus several ineligible cohorts. Do not add the policy to the activation registry in that slice unless the server runtime boundary is enforced in the same change.
+Next slice: teach the release path to commit a synthetic-demo activation only when the server scope, demo workflow, five passing gates, synthetic provenance, and human confirmation all match. Production scope must still deny.
 
 disposition: CONTINUE

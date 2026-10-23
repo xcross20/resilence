@@ -72,3 +72,13 @@ The calculator reads server-stamped `runtime_scope`, `evidence_origin`, `label_o
 Per-case latency and execution cost are the sums of every persisted attempt, including a failed attempt that preceded fallback. A case with no attempts is missing evidence, not zero.
 
 Eligibility from this function is not an activation. The release path still denies every policy until a later slice enforces the demo workflow boundary and a nonproduction server configuration.
+
+## D-13 — Persist the demo policy without activating it
+
+The demo cohort lives on workflow `service-desk-synthetic-demo`, not `service-desk`. Strategy documents may name that workflow. Existing `service-desk` revision hashes stay the same because the workflow id is part of the hash and those documents did not change.
+
+`EXECUTION_OPTIMIZER_RUNTIME_SCOPE` defaults to `synthetic-demo`. The value `production` makes the demo policy block with `production_runtime`. No value of that variable adds the policy to `APPROVED_ACTIVATION_POLICIES` or authorizes a production pointer.
+
+Case `SYN-D-000` fails its first economy attempt and then runs the fallback. The case id is a server fixture. A request cannot choose which method fails. The failed attempt's latency and execution cost are included in the case totals.
+
+Persisted demo tests run only when `DISPOSABLE_DATABASE_URL` points at a database that is not Railway. They do not call `railway run`.

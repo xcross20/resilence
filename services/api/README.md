@@ -47,6 +47,8 @@ curl -s -X POST localhost:8000/api/v1/executions \
 
 Gate policy `gate-policy-v0-fail-closed` stores the execution-cost quotient over `verified_success` only. A zero denominator is null. Modeled labor, infrastructure, and risk are disclosed on the evaluation and are not added into that quotient. Quality and latency stay `not_authoritative` because numerical thresholds are not approved. This policy cannot be stored with `eligible = true`. A request field named `eligible` is rejected.
 
+`gate-policy-synthetic-demo-v1` judges a separate synthetic workflow, `service-desk-synthetic-demo`. It can store `eligible = true` only from persisted paired evidence under the server runtime scope `synthetic-demo`. `EXECUTION_OPTIMIZER_RUNTIME_SCOPE=production` blocks that policy. The setting cannot grant production authority. `APPROVED_ACTIVATION_POLICIES` is still empty, so eligibility does not activate a revision.
+
 Results remain synthetic. They are not a real-world equivalence claim.
 
 ## Release
