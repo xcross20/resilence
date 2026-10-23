@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.runtime_reader import fetch_runtime_case
+from app.domain.gates import SYNTHETIC_DEMO_POLICY_VERSION, SYNTHETIC_EVIDENCE_ORIGIN, SYNTHETIC_LABEL_ORIGIN
 from app.domain.ids import stable_id
 from app.domain.release import (
     ReleaseDecision,
@@ -13,6 +14,7 @@ from app.domain.release import (
     judge_activation,
     judge_restore,
 )
+from app.domain.runtime_scope import server_runtime_scope
 from app.fixtures.seed import manifest_sha256
 from app.services.errors import ApiError
 from app.services.run_case import ACTOR, _digest, _stored_response, execute_case_in_transaction, run_idempotent
@@ -157,7 +159,8 @@ def _load_evaluation(session: Session, evaluation_id: str) -> dict | None:
     row = session.execute(
         text(
             """
-            SELECT evaluation_id, workflow_id, candidate_revision, status, eligible, gate_policy_version
+            SELECT evaluation_id, workflow_id, cohort_id, candidate_revision, baseline_revision,
+                   status, eligible, gate_policy_version, fixture_version, price_book_version
             FROM evaluation_run
             WHERE evaluation_id = :evaluation_id
             """
@@ -175,13 +178,63 @@ def _gate_statuses(session: Session, evaluation_id: str) -> dict[str, str]:
     return {row["gate_id"]: row["status"] for row in rows}
 
 
-def _apply_activation(session: Session, workflow_id: str, body: dict, expected_prior: str | None) -> int:
+def _activation_provenance(session: Session, evaluation: dict | None) -> dict:
+    """Read attempt and label origins. Missing rows are not treated as synthetic."""
+    if evaluation is None:
+        return {"evidence_origin": None, "label_origin": None, "live_provider_attempt_count": 0}
+    attempts = session.execute(
+        text(
+            """
+            SELECT count(*) AS attempt_count,
+                   count(*) FILTER (WHERE attempt.evidence_origin <> :expected) AS foreign_count
+            FROM attempt_record AS attempt
+            JOIN evaluation_case AS pair
+              ON attempt.run_id = pair.baseline_run_id OR attempt.run_id = pair.candidate_run_id
+            WHERE pair.evaluation_id = :evaluation_id
+            """
+        ),
+        {"evaluation_id": evaluation["evaluation_id"], "expected": SYNTHETIC_EVIDENCE_ORIGIN},
+    ).mappings().one()
+    labels = session.execute(
+        text(
+            """
+            SELECT count(*) AS label_count,
+                   count(*) FILTER (WHERE label.label_origin <> :expected) AS foreign_count
+            FROM reference_label AS label
+            JOIN evaluation_case AS pair ON label.case_id = pair.case_id
+            WHERE pair.evaluation_id = :evaluation_id
+              AND label.cohort_id = :cohort_id
+            """
+        ),
+        {
+            "evaluation_id": evaluation["evaluation_id"],
+            "cohort_id": evaluation["cohort_id"],
+            "expected": SYNTHETIC_LABEL_ORIGIN,
+        },
+    ).mappings().one()
+    foreign_attempts = int(attempts["foreign_count"])
+    return {
+        "evidence_origin": SYNTHETIC_EVIDENCE_ORIGIN if int(attempts["attempt_count"]) > 0 and foreign_attempts == 0 else None,
+        "label_origin": SYNTHETIC_LABEL_ORIGIN if int(labels["label_count"]) > 0 and int(labels["foreign_count"]) == 0 else None,
+        "live_provider_attempt_count": foreign_attempts,
+    }
+
+
+def _apply_activation(
+    session: Session,
+    workflow_id: str,
+    body: dict,
+    expected_prior: str | None,
+    baseline_revision: str | None,
+) -> int:
+    # Generation 0 has no active revision. Record the compared baseline so a later
+    # restore returns to that revision instead of finding nothing to restore.
     return session.execute(
         text(
             """
             UPDATE active_policy_pointer
             SET generation = generation + 1,
-                prior_revision_sha256 = revision_sha256,
+                prior_revision_sha256 = COALESCE(revision_sha256, :baseline_revision),
                 revision_sha256 = :target_revision,
                 evaluation_id = :evaluation_id
             WHERE workflow_id = :workflow_id
@@ -195,6 +248,7 @@ def _apply_activation(session: Session, workflow_id: str, body: dict, expected_p
             "evaluation_id": body["evaluation_id"],
             "expected_generation": body["expected_generation"],
             "expected_prior": expected_prior,
+            "baseline_revision": baseline_revision,
         },
     ).rowcount
 
@@ -229,6 +283,7 @@ def _activate_once(session: Session, body: dict, idempotency_key: str, correlati
     pointer = _lock_pointer(session, body["workflow_id"])
     evaluation = _load_evaluation(session, body["evaluation_id"])
     gates = {} if evaluation is None else _gate_statuses(session, body["evaluation_id"])
+    provenance = _activation_provenance(session, evaluation)
     decision = judge_activation(
         confirmation=body.get("confirmation"),
         expected_generation=body["expected_generation"],
@@ -243,14 +298,29 @@ def _activate_once(session: Session, body: dict, idempotency_key: str, correlati
         evaluation_eligible=bool(evaluation and evaluation["eligible"]),
         gate_policy_version=None if evaluation is None else evaluation["gate_policy_version"],
         gate_statuses=gates,
+        workflow_id=body["workflow_id"],
+        runtime_scope=server_runtime_scope(),
+        fixture_version=None if evaluation is None else evaluation["fixture_version"],
+        price_book_version=None if evaluation is None else evaluation["price_book_version"],
+        evidence_origin=provenance["evidence_origin"],
+        label_origin=provenance["label_origin"],
+        live_provider_attempt_count=provenance["live_provider_attempt_count"],
     )
-    if decision.commit_transition and _apply_activation(session, body["workflow_id"], body, pointer["revision_sha256"]) != 1:
+    baseline_revision = None if evaluation is None else evaluation["baseline_revision"]
+    if (
+        decision.commit_transition
+        and _apply_activation(session, body["workflow_id"], body, pointer["revision_sha256"], baseline_revision) != 1
+    ):
         decision = ReleaseDecision(409, "stale_generation", False, "activation_denied")
     pointer_after = pointer if not decision.commit_transition else _lock_pointer(session, body["workflow_id"])
+    policy = None if evaluation is None else evaluation["gate_policy_version"]
     details = {
         "evaluation_status": None if evaluation is None else evaluation["status"],
-        "gate_policy_version": None if evaluation is None else evaluation["gate_policy_version"],
-        "eligibility_authoritative": False,
+        "gate_policy_version": policy,
+        "eligibility_authoritative": bool(
+            decision.commit_transition and policy == SYNTHETIC_DEMO_POLICY_VERSION and evaluation and evaluation["eligible"]
+        ),
+        "production_authority": False,
         "gate_statuses": gates,
     }
     event = _event_fields(

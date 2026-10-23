@@ -2,6 +2,8 @@
 
 import json
 import os
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -334,7 +336,7 @@ def test_eligible_demo_evaluation_is_persisted_from_execution_records(demo_world
         {"status": "failed", "method_id": "economy"},
         {"status": "succeeded", "method_id": "premium"},
     ]
-    assert APPROVED_ACTIVATION_POLICIES == frozenset()
+    assert APPROVED_ACTIVATION_POLICIES == frozenset({SYNTHETIC_DEMO_POLICY_VERSION})
 
 
 def test_ineligible_demo_cohorts_fail_closed(demo_world) -> None:
@@ -446,3 +448,330 @@ def test_verification_cohort_does_not_overlap_acceptance_cases(demo_world) -> No
     assert "SD-081" not in acceptance
     assert len(acceptance) == 100
     assert len(verification) == 20
+
+
+ACTIVATE = "activate_synthetic_revision"
+RESTORE = "restore_prior_revision"
+OVERLAP_COHORT_ID = "synthetic-demo-overlap"
+
+
+def _generation(engine, workflow_id: str) -> int:
+    with engine.connect() as connection:
+        value = connection.execute(
+            text("SELECT generation FROM active_policy_pointer WHERE workflow_id = :workflow_id"),
+            {"workflow_id": workflow_id},
+        ).scalar_one_or_none()
+    return 0 if value is None else int(value)
+
+
+def _ensure_service_desk(engine) -> None:
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                INSERT INTO workflow_definition (workflow_id, version, graph_json)
+                VALUES ('service-desk', 'service-desk-v1', CAST(:graph_json AS json))
+                ON CONFLICT (workflow_id) DO NOTHING
+                """
+            ),
+            {"graph_json": '{"nodes": [{"step_id": "draft_resolution", "name": "Draft resolution"}], "edges": []}'},
+        )
+
+
+def _overlap_manifest(engine) -> str:
+    case_ids = ["SYN-D-000", "SYN-V-000"]
+    digest = manifest_sha256(case_ids, FIXTURE_VERSION)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                INSERT INTO cohort_manifest (
+                    cohort_id, workflow_id, version, purpose, fixture_version, manifest_sha256, case_ids
+                )
+                VALUES (
+                    :cohort_id, :workflow_id, :version, 'verification', :fixture_version,
+                    :manifest_sha256, CAST(:case_ids AS json)
+                )
+                """
+            ),
+            {
+                "cohort_id": OVERLAP_COHORT_ID,
+                "workflow_id": DEMO_WORKFLOW_ID,
+                "version": OVERLAP_COHORT_ID + "-v1",
+                "fixture_version": FIXTURE_VERSION,
+                "manifest_sha256": digest,
+                "case_ids": '["SYN-D-000", "SYN-V-000"]',
+            },
+        )
+    return digest
+
+
+def _activation(evaluation_id: str, revision: str, **overrides) -> dict:
+    body = {
+        "workflow_id": DEMO_WORKFLOW_ID,
+        "evaluation_id": evaluation_id,
+        "candidate_revision": revision,
+        "expected_prior_revision": None,
+        "expected_generation": 0,
+        "confirmation": ACTIVATE,
+    }
+    body.update(overrides)
+    return body
+
+
+def _release(client: TestClient, body: dict, key: str):
+    return client.post("/api/v1/releases", json=body, headers={"Idempotency-Key": key})
+
+
+def _post_release(app, body: dict, key: str) -> dict:
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        response = test_client.post("/api/v1/releases", json=body, headers={"Idempotency-Key": key})
+    return {"status": response.status_code, "body": response.json()}
+
+
+def test_synthetic_demo_can_activate_verify_and_restore_without_production_authority(demo_world, monkeypatch) -> None:
+    client = demo_world["client"]
+    engine = demo_world["engine"]
+    revisions = demo_world["revisions"]
+    manifests = demo_world["manifests"]
+    _ensure_service_desk(engine)
+    eligible = _post(
+        client,
+        _body(
+            ACCEPTANCE_COHORT_ID,
+            manifests[ACCEPTANCE_COHORT_ID],
+            revisions["premium"],
+            revisions["economy"],
+            SYNTHETIC_DEMO_POLICY_VERSION,
+        ),
+        "demo-eligible",
+    )
+    assert eligible.status_code == 201, eligible.text
+    eligible_id = eligible.json()["evaluation_id"]
+    safety = _post(
+        client,
+        _body(
+            "synthetic-demo-safety",
+            manifests["synthetic-demo-safety"],
+            revisions["premium"],
+            revisions["deterministic"],
+            SYNTHETIC_DEMO_POLICY_VERSION,
+        ),
+        "demo-safety",
+    )
+    assert safety.status_code == 201, safety.text
+    v0 = _post(
+        client,
+        _body(
+            ACCEPTANCE_COHORT_ID,
+            manifests[ACCEPTANCE_COHORT_ID],
+            revisions["premium"],
+            revisions["economy"],
+            GATE_POLICY_VERSION,
+        ),
+        "demo-v0",
+    )
+    assert v0.status_code == 201, v0.text
+    assert v0.json()["eligible"] is False
+
+    def unchanged(before: int, response, code: str) -> None:
+        assert response.status_code == 409, response.text
+        payload = response.json()
+        assert payload["code"] == code
+        assert payload["details"]["production_authority"] is False
+        assert payload["details"]["eligibility_authoritative"] is False
+        assert payload["generation"] == before
+        assert _generation(engine, DEMO_WORKFLOW_ID) == before
+        assert _generation(engine, "service-desk") == 0
+
+    before = _generation(engine, DEMO_WORKFLOW_ID)
+    unchanged(
+        before,
+        _release(client, _activation(safety.json()["evaluation_id"], revisions["deterministic"]), "demo-deny-safety"),
+        "evaluation_not_eligible",
+    )
+    unchanged(
+        before,
+        _release(client, _activation(v0.json()["evaluation_id"], revisions["economy"]), "demo-deny-v0"),
+        "evaluation_not_eligible",
+    )
+    unchanged(
+        before,
+        _release(client, _activation(eligible_id, revisions["economy"], confirmation=None), "demo-deny-confirmation"),
+        "missing_approval",
+    )
+    unchanged(
+        before,
+        _release(client, _activation(eligible_id, revisions["economy"], expected_generation=7), "demo-deny-stale"),
+        "stale_generation",
+    )
+    forged = _activation(eligible_id, revisions["economy"])
+    forged["eligible"] = True
+    forged["environment"] = "demo"
+    rejected = _release(client, forged, "demo-deny-forged")
+    assert rejected.status_code == 422
+    assert _generation(engine, DEMO_WORKFLOW_ID) == before
+
+    monkeypatch.setenv("EXECUTION_OPTIMIZER_RUNTIME_SCOPE", "production")
+    unchanged(
+        before,
+        _release(client, _activation(eligible_id, revisions["economy"]), "demo-deny-production"),
+        "production_runtime",
+    )
+    monkeypatch.delenv("EXECUTION_OPTIMIZER_RUNTIME_SCOPE", raising=False)
+    unchanged(
+        before,
+        _release(
+            client,
+            _activation(eligible_id, revisions["economy"], workflow_id="service-desk"),
+            "demo-deny-service-desk",
+        ),
+        "evaluation_workflow_mismatch",
+    )
+
+    body = _activation(eligible_id, revisions["economy"])
+    barrier = threading.Barrier(3)
+    results: list[dict | None] = [None, None]
+
+    def worker(index: int) -> None:
+        barrier.wait(timeout=30)
+        results[index] = _post_release(client.app, body, "demo-activate")
+
+    locker = engine.connect()
+    transaction = locker.begin()
+    threads = [threading.Thread(target=worker, args=(index,)) for index in range(2)]
+    waiting = 0
+    try:
+        locker.execute(text("LOCK TABLE active_policy_pointer IN ACCESS EXCLUSIVE MODE"))
+        for thread in threads:
+            thread.start()
+        barrier.wait(timeout=30)
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            waiting = locker.execute(
+                text(
+                    """
+                    SELECT count(*) FROM pg_locks
+                    WHERE relation = 'active_policy_pointer'::regclass AND NOT granted
+                    """
+                )
+            ).scalar_one()
+            if waiting >= 2:
+                break
+            time.sleep(0.05)
+        transaction.commit()
+        for thread in threads:
+            thread.join(timeout=120)
+    finally:
+        if transaction.is_active:
+            transaction.rollback()
+        locker.close()
+
+    assert waiting >= 2, results
+    assert [item["status"] for item in results] == [200, 200]
+    assert results[0]["body"]["event_id"] == results[1]["body"]["event_id"]
+    assert results[0]["body"]["code"] == "activation_committed"
+    assert results[0]["body"]["generation"] == before + 1
+    assert results[0]["body"]["active_revision"] == revisions["economy"]
+    assert results[0]["body"]["prior_revision"] == revisions["premium"]
+    assert results[0]["body"]["details"]["eligibility_authoritative"] is True
+    assert results[0]["body"]["details"]["production_authority"] is False
+    assert _generation(engine, DEMO_WORKFLOW_ID) == before + 1
+    assert _generation(engine, "service-desk") == 0
+    with engine.connect() as connection:
+        committed = connection.execute(
+            text(
+                """
+                SELECT count(*) FROM release_event
+                WHERE workflow_id = :workflow_id AND event_type = 'activation_committed'
+                """
+            ),
+            {"workflow_id": DEMO_WORKFLOW_ID},
+        ).scalar_one()
+    assert committed == 1
+
+    replay = _release(client, body, "demo-activate")
+    assert replay.status_code == 200
+    assert replay.json()["event_id"] == results[0]["body"]["event_id"]
+    assert _generation(engine, DEMO_WORKFLOW_ID) == before + 1
+    conflict = _release(client, _activation(eligible_id, revisions["premium"]), "demo-activate")
+    assert conflict.status_code == 409
+    assert conflict.json()["code"] == "idempotency_conflict"
+    assert _generation(engine, DEMO_WORKFLOW_ID) == before + 1
+    stale = _release(client, body, "demo-activate-again")
+    assert stale.status_code == 409
+    assert stale.json()["code"] == "stale_generation"
+    assert _generation(engine, DEMO_WORKFLOW_ID) == before + 1
+
+    verified = client.post(
+        f"/api/v1/releases/{DEMO_WORKFLOW_ID}/verifications",
+        json={
+            "cohort_id": VERIFICATION_COHORT_ID,
+            "expected_manifest_sha256": manifests[VERIFICATION_COHORT_ID],
+            "expected_fixture_version": FIXTURE_VERSION,
+            "expected_active_revision": revisions["economy"],
+            "expected_generation": before + 1,
+        },
+        headers={"Idempotency-Key": "demo-verify"},
+    )
+    assert verified.status_code == 201, verified.text
+    verified_body = verified.json()
+    assert verified_body["details"]["status"] == "recorded"
+    assert verified_body["details"]["claims_independent_holdout"] is False
+    assert verified_body["details"]["release_authorized"] is False
+    assert verified_body["generation"] == before + 1
+    runs_after_verify = _count(engine, "execution_run")
+
+    overlap_manifest = _overlap_manifest(engine)
+    overlap = client.post(
+        f"/api/v1/releases/{DEMO_WORKFLOW_ID}/verifications",
+        json={
+            "cohort_id": OVERLAP_COHORT_ID,
+            "expected_manifest_sha256": overlap_manifest,
+            "expected_fixture_version": FIXTURE_VERSION,
+            "expected_active_revision": revisions["economy"],
+            "expected_generation": before + 1,
+        },
+        headers={"Idempotency-Key": "demo-overlap"},
+    )
+    assert overlap.status_code == 409, overlap.text
+    assert overlap.json()["code"] == "verification_cohort_overlap"
+    assert overlap.json()["details"]["claims_independent_holdout"] is False
+    assert overlap.json()["generation"] == before + 1
+    assert _count(engine, "execution_run") == runs_after_verify
+
+    missing_restore = client.post(
+        f"/api/v1/releases/{DEMO_WORKFLOW_ID}/restore",
+        json={"expected_generation": before + 1, "confirmation": None},
+        headers={"Idempotency-Key": "demo-restore-missing"},
+    )
+    assert missing_restore.status_code == 409
+    assert missing_restore.json()["code"] == "missing_approval"
+    assert _generation(engine, DEMO_WORKFLOW_ID) == before + 1
+
+    restored = client.post(
+        f"/api/v1/releases/{DEMO_WORKFLOW_ID}/restore",
+        json={"expected_generation": before + 1, "confirmation": RESTORE},
+        headers={"Idempotency-Key": "demo-restore"},
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["code"] == "restoration_committed"
+    assert restored.json()["active_revision"] == revisions["premium"]
+    assert restored.json()["prior_revision"] == revisions["economy"]
+    assert restored.json()["generation"] == before + 2
+    assert restored.json()["details"]["release_authorized"] is False
+    replay_restore = client.post(
+        f"/api/v1/releases/{DEMO_WORKFLOW_ID}/restore",
+        json={"expected_generation": before + 1, "confirmation": RESTORE},
+        headers={"Idempotency-Key": "demo-restore"},
+    )
+    assert replay_restore.status_code == 200
+    assert replay_restore.json() == restored.json()
+    assert _generation(engine, DEMO_WORKFLOW_ID) == before + 2
+    assert _generation(engine, "service-desk") == 0
+    workflow = client.get(f"/api/v1/workflows/{DEMO_WORKFLOW_ID}")
+    assert workflow.status_code == 200
+    assert workflow.json()["active_policy"]["revision_sha256"] == revisions["premium"]
+    assert workflow.json()["active_policy"]["generation"] == before + 2
+    service_desk = client.get("/api/v1/workflows/service-desk")
+    assert service_desk.json()["active_policy"] is None

@@ -1,9 +1,9 @@
 # Known limitations
 
-- Gate policy `gate-policy-v0-fail-closed` never stores `eligible = true`. `APPROVED_ACTIVATION_POLICIES` is empty. The API cannot commit an activation.
-- `gate-policy-synthetic-demo-v1` can persist an eligible evaluation on `service-desk-synthetic-demo`. `APPROVED_ACTIVATION_POLICIES` is empty, so that eligibility does not activate a revision and it is not production authority.
-- Numerical quality, latency, noninferiority, and minimum-evidence thresholds are not approved. Quality and latency gates stay `not_authoritative`.
-- Restoration in tests uses a pointer planted by the database owner. That plant is not an API activation and it is not an eligibility grant.
+- Gate policy `gate-policy-v0-fail-closed` never stores `eligible = true` and is not in `APPROVED_ACTIVATION_POLICIES`. A v0 evaluation cannot activate.
+- `gate-policy-synthetic-demo-v1` can activate only on workflow `service-desk-synthetic-demo` when the server runtime is `synthetic-demo`, provenance is synthetic, and the stored evaluation is eligible. That activation is not production authority. `production_authority` stays false.
+- v0 quality, latency, and noninferiority stay `not_authoritative`. The synthetic-demo policy uses the RE-001-COMPLETE-001 comparison rules. Those rules are not statistical noninferiority and they are not a production gate.
+- A database owner can still plant a pointer. That plant is not an API activation. The synthetic-demo API path now records the compared baseline as the first prior revision and can restore it.
 - Verification does not claim an independent holdout. `HOLDOUT_CLAIMS_APPROVED` is false. Overlap with an acceptance case is denied before execution.
 - A recorded regression does not move the active pointer and does not restore the prior revision by itself.
 - `runtime_case_v` is an application allowlist. The database owner can still read `reference_label`.

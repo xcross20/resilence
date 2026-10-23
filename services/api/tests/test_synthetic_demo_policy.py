@@ -307,8 +307,8 @@ def test_unknown_policy_and_a_forged_call_shape_cannot_pass() -> None:
     missing = judge_named_policy(SYNTHETIC_DEMO_POLICY_VERSION, demo=None)
     assert missing.eligible is False
     assert missing.gates[0].reason_code == "missing_evidence"
-    assert SYNTHETIC_DEMO_POLICY_VERSION not in APPROVED_ACTIVATION_POLICIES
-    assert APPROVED_ACTIVATION_POLICIES == frozenset()
+    assert "gate-policy-synthetic-demo-v1-forged" not in APPROVED_ACTIVATION_POLICIES
+    assert APPROVED_ACTIVATION_POLICIES == frozenset({SYNTHETIC_DEMO_POLICY_VERSION})
 
 
 def test_production_runtime_and_live_provider_execution_are_blocked() -> None:

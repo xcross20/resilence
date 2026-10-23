@@ -79,6 +79,14 @@ The demo cohort lives on workflow `service-desk-synthetic-demo`, not `service-de
 
 `EXECUTION_OPTIMIZER_RUNTIME_SCOPE` defaults to `synthetic-demo`. The value `production` makes the demo policy block with `production_runtime`. No value of that variable adds the policy to `APPROVED_ACTIVATION_POLICIES` or authorizes a production pointer.
 
+## D-14 — Synthetic-demo activation stays inside its workflow
+
+`APPROVED_ACTIVATION_POLICIES` contains only `gate-policy-synthetic-demo-v1`. v0 remains unable to commit. A caller-supplied allowlist can still commit a different policy name in the unit test; the service does not accept that name.
+
+Before a demo commit, the release service loads the server runtime, the evaluation fixture and price book, and the persisted attempt and label origins. A production runtime, any other runtime, a workflow other than `service-desk-synthetic-demo`, a live-provider attempt, a nonsynthetic origin, or a mismatched fixture or price book is denied. The request has no `eligible` or `environment` field. A denied request leaves the pointer unchanged. A committed response sets `eligibility_authoritative` true only for that demo transition and always sets `production_authority` false.
+
+The first activation records `COALESCE(current revision, evaluation baseline)` as the prior revision. Later activations record the revision that was active. A confirmed restore swaps those two revisions and appends an event. It does not rewrite history. Verification of a disjoint cohort can record a result and still cannot claim an independent holdout or move the pointer.
+
 Case `SYN-D-000` fails its first economy attempt and then runs the fallback. The case id is a server fixture. A request cannot choose which method fails. The failed attempt's latency and execution cost are included in the case totals.
 
 Persisted demo tests run only when `DISPOSABLE_DATABASE_URL` points at a database that is not Railway. They do not call `railway run`.
