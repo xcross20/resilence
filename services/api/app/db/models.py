@@ -1,4 +1,4 @@
-"""Alembic revisions 0001_evidence_chain and 0002_evaluation are the schema contract.
+"""Alembic revisions 0001_evidence_chain, 0002_evaluation, and 0003_release are the schema contract.
 
 The application inserts with explicit SQL. It does not call metadata.create_all.
 runtime_case_v is an application column allowlist, not a database privilege boundary.
@@ -43,4 +43,8 @@ APPLICATION_TABLES = (
     "evaluation_run",
     "evaluation_case",
     "evaluation_gate",
+    "active_policy_pointer",
+    "verification_run",
+    "verification_case",
+    "release_event",
 )

@@ -5,6 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from app.api.evaluations import router as evaluations_router
+from app.api.releases import router as releases_router
 from app.api.executions import router as executions_router
 from app.db.database_url import create_database_engine
 from app.api.revisions import router as revisions_router
@@ -13,7 +14,7 @@ from app.services.errors import ApiError
 
 
 def create_app(engine=None) -> FastAPI:
-    app = FastAPI(title="Execution Optimizer", version="0.2.0")
+    app = FastAPI(title="Execution Optimizer", version="0.3.0")
     app.state.engine = engine or create_database_engine()
 
     @app.middleware("http")
@@ -52,6 +53,7 @@ def create_app(engine=None) -> FastAPI:
     app.include_router(revisions_router)
     app.include_router(executions_router)
     app.include_router(evaluations_router)
+    app.include_router(releases_router)
     return app
 
 

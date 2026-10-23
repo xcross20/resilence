@@ -49,6 +49,14 @@ Gate policy `gate-policy-v0-fail-closed` stores the execution-cost quotient over
 
 Results remain synthetic. They are not a real-world equivalence claim.
 
+## Release
+
+`POST /api/v1/releases` requires `confirmation` `activate_synthetic_revision`, the expected generation, and the exact candidate revision. Gate policy v0 is not approved, so the call appends `activation_denied` and does not move the pointer. A request field named `eligible` is rejected.
+
+`POST /api/v1/releases/{workflow_id}/verifications` runs only a `verification` cohort. Overlap with an acceptance case is disclosed and not executed. A critical violation on a planted active revision is stored as `regressed`. The result does not claim an independent holdout.
+
+`POST /api/v1/releases/{workflow_id}/restore` restores the recorded prior revision. `release_event` is append-only.
+
 ## Deferred
 
-Release activation, verification cohorts, restoration, and the Next.js workbench are not in this service. An eligible activation cannot succeed until numerical gate thresholds are approved.
+The Next.js workbench is not in this service. A successful activation waits on an approved gate policy.

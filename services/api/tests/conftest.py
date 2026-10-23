@@ -16,6 +16,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def reset_runtime_rows(engine) -> None:
     statements = [
+        "TRUNCATE TABLE release_event RESTART IDENTITY",
+        "DELETE FROM verification_case",
+        "DELETE FROM verification_run",
+        "UPDATE active_policy_pointer SET generation = 0, revision_sha256 = NULL, prior_revision_sha256 = NULL, evaluation_id = NULL",
         "DELETE FROM evaluation_gate",
         "DELETE FROM evaluation_case",
         "DELETE FROM evaluation_run",

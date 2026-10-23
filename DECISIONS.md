@@ -37,6 +37,16 @@ Modeled allocations are stored on `evaluation_run`, not in `cost_entry`: labor `
 
 Cohort purpose stays `acceptance` only. Verification purpose is IMP-003.
 
+## D-11 — Release denies until a gate policy is approved
+
+`APPROVED_ACTIVATION_POLICIES` is empty. `POST /api/v1/releases` cannot commit an activation while it stays empty. A v0 evaluation, a blocked evaluation, an inconclusive evaluation, and a completed-but-ineligible evaluation all append `activation_denied` and leave generation unchanged.
+
+Cohort purpose may be `acceptance` or `verification`. A verification manifest that repeats an acceptance case id is `verification_cohort_overlap`. It does not execute those cases and does not claim an independent holdout. `HOLDOUT_CLAIMS_APPROVED` is false, so a clean synthetic recording also does not claim holdout.
+
+Restoration swaps the active revision with the recorded prior revision and appends an event. It does not rewrite history. `release_event` rejects UPDATE and DELETE. With no recorded prior, restoration is `nothing_to_restore`.
+
+A database owner can plant a pointer in tests. That plant is not an API activation and it does not approve a numerical threshold.
+
 ## Stop boundary
 
-Do not invent a passing noninferiority margin or a minimum sample size. Do not treat a v0 evaluation as authorization to activate a strategy.
+Do not invent a passing noninferiority margin or a minimum sample size. Do not treat a v0 evaluation as authorization to activate a strategy. IMP-004 cannot demonstrate a successful activation until a human approves a gate policy and adds it to `APPROVED_ACTIVATION_POLICIES`.

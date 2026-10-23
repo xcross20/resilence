@@ -82,7 +82,14 @@ def _evaluation_body(cohort_id: str, manifest: str, fixture_version: str, baseli
     }
 
 
-def _insert_cohort(engine, cohort_id: str, fixture_version: str, cases: list[dict], manifest_case_ids: list[str] | None = None) -> str:
+def _insert_cohort(
+    engine,
+    cohort_id: str,
+    fixture_version: str,
+    cases: list[dict],
+    manifest_case_ids: list[str] | None = None,
+    purpose: str = "acceptance",
+) -> str:
     case_ids = manifest_case_ids or [item["case_id"] for item in cases]
     digest = manifest_sha256(case_ids, fixture_version)
     with engine.begin() as connection:
@@ -93,7 +100,7 @@ def _insert_cohort(engine, cohort_id: str, fixture_version: str, cases: list[dic
                     cohort_id, workflow_id, version, purpose, fixture_version, manifest_sha256, case_ids
                 )
                 VALUES (
-                    :cohort_id, 'service-desk', :version, 'acceptance', :fixture_version,
+                    :cohort_id, 'service-desk', :version, :purpose, :fixture_version,
                     :manifest_sha256, CAST(:case_ids AS json)
                 )
                 """
@@ -101,6 +108,7 @@ def _insert_cohort(engine, cohort_id: str, fixture_version: str, cases: list[dic
             {
                 "cohort_id": cohort_id,
                 "version": cohort_id + "-v1",
+                "purpose": purpose,
                 "fixture_version": fixture_version,
                 "manifest_sha256": digest,
                 "case_ids": json.dumps(case_ids),
