@@ -50,3 +50,7 @@ A database owner can plant a pointer in tests. That plant is not an API activati
 ## Stop boundary
 
 Do not invent a passing noninferiority margin or a minimum sample size. Do not treat a v0 evaluation as authorization to activate a strategy. IMP-004 cannot demonstrate a successful activation until a human approves a gate policy and adds it to `APPROVED_ACTIVATION_POLICIES`.
+
+## Recorded stop — 2026-10-23
+
+Independent QA accepted IMP-003 at `f9716cb2f2490213ddd7013feff0e30c1d29a893`. The next milestone's success path needs an approved gate policy. That approval is absent, so IMP-004 and IMP-005 were not started. This stop does not change D-09, D-10, or D-11. It does not accept UO-001.

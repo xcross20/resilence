@@ -1,20 +1,76 @@
 {
-  "milestone": "IMP-003",
-  "builder_status": "READY_FOR_INDEPENDENT_QA",
-  "independent_status": "PENDING",
+  "milestone": "RE-001-MASTER-001",
+  "final_status": "BLOCKED",
+  "builder_status": "STOPPED_PENDING_GATE_POLICY",
+  "independent_status": "IMP-003_ACCEPTED_MISSION_BLOCKED",
   "self_accepted": false,
+  "uo_001_acceptance": "NOT_CLAIMED",
+  "product_commit": "f9716cb2f2490213ddd7013feff0e30c1d29a893",
   "accepted_commits": {
     "IMP-001": "040d5a9086e6faf54985fd482815588318f0f9a5",
-    "IMP-002": "c35d1c8a1cc6b2d23f5413408224fc32a2c8201d"
+    "IMP-002": "c35d1c8a1cc6b2d23f5413408224fc32a2c8201d",
+    "IMP-003": "f9716cb2f2490213ddd7013feff0e30c1d29a893"
+  },
+  "blocked_milestones": {
+    "IMP-004": "No approved gate policy can authorize activation. The workbench was not started.",
+    "IMP-005": "User-outcome acceptance requires the unfinished workbench journey and eligible activation."
+  },
+  "reviewers": [
+    {
+      "milestone": "IMP-001",
+      "session": "01a16718-cd7b-7fc2-b50c-cb6bde1c596f",
+      "verdict": "ACCEPTED",
+      "commit": "040d5a9086e6faf54985fd482815588318f0f9a5",
+      "pytest_passed": 25,
+      "pytest_exit_code": 0,
+      "pytest_duration_seconds": 64.10
+    },
+    {
+      "milestone": "IMP-002",
+      "session": "01a16735-2c0a-7392-8faa-e16bf320690e",
+      "verdict": "ACCEPTED",
+      "commit": "c35d1c8a1cc6b2d23f5413408224fc32a2c8201d",
+      "pytest_passed": 43,
+      "pytest_exit_code": 0,
+      "pytest_duration_seconds": 209.70
+    },
+    {
+      "milestone": "IMP-003",
+      "session": "01a1674e-8ea6-7e53-9f3c-e3145d22b519",
+      "verdict": "ACCEPTED",
+      "commit": "f9716cb2f2490213ddd7013feff0e30c1d29a893",
+      "pytest_passed": 53,
+      "pytest_failed": 0,
+      "pytest_exit_code": 0,
+      "pytest_duration_seconds": 305.33,
+      "warnings": 1
+    }
+  ],
+  "outcome_verification": {
+    "source_commit": "f9716cb2f2490213ddd7013feff0e30c1d29a893",
+    "overall_status": "INCONCLUSIVE",
+    "exit_code": 3,
+    "worktree_dirty": false,
+    "passed_checks": ["imp001-assessment", "imp001-routing", "imp001-revision"],
+    "unverified": ["UO-AC-01", "UO-AC-02", "UO-AC-03", "UO-AC-04", "UO-AC-05", "UO-AC-06", "UO-AC-07", "UO-AC-08", "UO-AC-09", "UO-AC-10", "IMP-001-DB", "IMP-002", "IMP-003", "IMP-004", "IMP-005"]
   },
   "gate_policy_version": "gate-policy-v0-fail-closed",
   "approved_activation_policies": [],
   "eligibility_authoritative": false,
   "holdout_claims_approved": false,
-  "uo_001_acceptance": "NOT_CLAIMED",
   "measurements": [
     {
-      "name": "full_pytest",
+      "name": "imp003_reviewer_full_pytest",
+      "command": "railway run --service Postgres .venv/bin/python -m pytest -q --tb=line",
+      "cwd": "services/api",
+      "exit_code": 0,
+      "passed": 53,
+      "failed": 0,
+      "duration_seconds": 305.33,
+      "warnings": 1
+    },
+    {
+      "name": "imp003_builder_full_pytest",
       "command": "railway run --service Postgres .venv/bin/python -m pytest -q --tb=line",
       "cwd": "services/api",
       "exit_code": 0,
@@ -25,6 +81,6 @@
     }
   ],
   "frameworks_not_added": ["hypothesis", "testcontainers", "schemathesis", "playwright", "mutmut"],
-  "reason": "The existing pytest suite and Railway Postgres covered the IMP-003 checks. Playwright waits for the workbench slice.",
+  "reason": "IMP-004 cannot show an eligible activation until a human approves numerical thresholds. Existing pytest and Railway Postgres were sufficient for IMP-001 through IMP-003.",
   "limitation": "Synthetic results are not statistical proof of real-world model equivalence. Successful activation is blocked until a gate policy is approved."
 }

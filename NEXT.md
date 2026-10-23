@@ -1,8 +1,9 @@
 # Next
 
-1. Independent reviewer inspects the IMP-003 commit in a separate session, on a clean tree, and re-runs the suite.
-2. Accept only if blocked, inconclusive, and ineligible evaluations are denied, generation stays unchanged, overlap is disclosed, an injected regression is visible, restoration of a recorded prior replays once, and `release_event` rejects update.
-3. If that verdict is IMP-003 ACCEPTED, stop the activation success path until a human approves a gate policy. IMP-004 may show denial. It must not invent an eligible activation.
-4. If the verdict is REPAIR_REQUIRED, repair only the cited defect.
+1. A human approves a versioned gate policy, including numerical quality, latency, noninferiority, and minimum-evidence requirements, or confirms that activation stays denied.
+2. Only after that approval, add the policy id to `APPROVED_ACTIVATION_POLICIES` and prove one eligible activation against the approved thresholds.
+3. Then start IMP-004 against the approved v0.6.4 destinations. Denial of an ineligible strategy can be shown before that approval. A successful activation cannot.
+4. Map approved Outcome Verification commands to UO-AC-01 through UO-AC-10 before claiming user-outcome acceptance.
+5. Do not merge to `main`, deploy, change Railway networking, or spend on a live model provider as part of this stop.
 
-Human approval still required before any numerical quality, latency, noninferiority, or minimum-evidence gate can grant eligibility.
+If a later review finds a defect in `f9716cb`, repair only that defect. Do not reopen the accepted IMP-001 race fix or the IMP-002 rubric unless a new failure appears.
