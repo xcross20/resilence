@@ -1,0 +1,11 @@
+[
+  {
+    "cohort_id": "acceptance-sd081",
+    "case_id": "SD-081",
+    "reference_category": "privileged",
+    "expected_disposition": "escalated",
+    "expected_resolution": "synthetic-escalation",
+    "rubric_version": "rubric-v1",
+    "label_origin": "synthetic_rubric"
+  }
+]

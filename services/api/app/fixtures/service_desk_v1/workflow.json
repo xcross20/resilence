@@ -1,0 +1,8 @@
+{
+  "workflow_id": "service-desk",
+  "version": "service-desk-v1",
+  "graph": {
+    "nodes": [{"step_id": "draft_resolution", "name": "Draft resolution"}],
+    "edges": []
+  }
+}

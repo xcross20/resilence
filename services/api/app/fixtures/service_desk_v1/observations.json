@@ -1,0 +1,11 @@
+[
+  {
+    "observation_id": "OBS-081",
+    "cohort_id": "acceptance-sd081",
+    "case_id": "SD-081",
+    "classifier_version": "synthetic-classifier-v1",
+    "observed_category": "ambiguous",
+    "confidence_bps": 6200,
+    "evidence_origin": "synthetic_simulated"
+  }
+]

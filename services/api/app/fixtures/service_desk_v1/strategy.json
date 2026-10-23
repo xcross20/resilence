@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "workflow_id": "service-desk",
+  "rules": [
+    {"rule_id": "R2", "priority": 20, "when": {"observed_category_in": ["privileged", "ambiguous"]}, "method": "premium"},
+    {"rule_id": "R1", "priority": 10, "when": {"observed_category_in": ["routine"]}, "method": "economy"}
+  ],
+  "default_method": "premium",
+  "fallback_method": "premium"
+}
