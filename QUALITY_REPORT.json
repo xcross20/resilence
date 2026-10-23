@@ -1,8 +1,9 @@
 {
-  "milestone": "RE-001-MASTER-001",
+  "milestone": "RE-001-COMPLETE-001",
+  "disposition": "CONTINUE",
   "final_status": "BLOCKED",
-  "builder_status": "STOPPED_PENDING_GATE_POLICY",
-  "independent_status": "IMP-003_ACCEPTED_MISSION_BLOCKED",
+  "builder_status": "P0_CALCULATOR_ONLY",
+  "independent_status": "IMP-003_ACCEPTED_DEMO_POLICY_NOT_ACTIVATED",
   "self_accepted": false,
   "uo_001_acceptance": "NOT_CLAIMED",
   "product_commit": "f9716cb2f2490213ddd7013feff0e30c1d29a893",
@@ -60,6 +61,17 @@
   "holdout_claims_approved": false,
   "measurements": [
     {
+      "name": "p0_demo_policy_unit",
+      "command": ".venv/bin/python -m pytest -q tests/test_gates.py tests/test_synthetic_demo_policy.py tests/test_release_policy.py --tb=short",
+      "cwd": "services/api",
+      "exit_code": 0,
+      "passed": 29,
+      "failed": 0,
+      "duration_seconds": 0.03,
+      "warnings": 1,
+      "database": "none"
+    },
+    {
       "name": "imp003_reviewer_full_pytest",
       "command": "railway run --service Postgres .venv/bin/python -m pytest -q --tb=line",
       "cwd": "services/api",
@@ -81,6 +93,6 @@
     }
   ],
   "frameworks_not_added": ["hypothesis", "testcontainers", "schemathesis", "playwright", "mutmut"],
-  "reason": "IMP-004 cannot show an eligible activation until a human approves numerical thresholds. Existing pytest and Railway Postgres were sufficient for IMP-001 through IMP-003.",
-  "limitation": "Synthetic results are not statistical proof of real-world model equivalence. Successful activation is blocked until a gate policy is approved."
+  "reason": "RE-001-COMPLETE-001 authorizes gate-policy-synthetic-demo-v1 for a synthetic demonstration. This slice implements the calculator only. Activation stays denied until the server runtime boundary is enforced.",
+  "limitation": "Synthetic results are not statistical proof of real-world model equivalence. The demo policy is not production authority and is not yet an activation policy."
 }

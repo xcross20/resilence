@@ -1,6 +1,7 @@
 # Known limitations
 
 - Gate policy `gate-policy-v0-fail-closed` never stores `eligible = true`. `APPROVED_ACTIVATION_POLICIES` is empty. The API cannot commit an activation.
+- `gate-policy-synthetic-demo-v1` can judge an in-memory cohort. That judgment is not wired to persistence or release, and it is not production authority.
 - Numerical quality, latency, noninferiority, and minimum-evidence thresholds are not approved. Quality and latency gates stay `not_authoritative`.
 - Restoration in tests uses a pointer planted by the database owner. That plant is not an API activation and it is not an eligibility grant.
 - Verification does not claim an independent holdout. `HOLDOUT_CLAIMS_APPROVED` is false. Overlap with an acceptance case is denied before execution.

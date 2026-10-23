@@ -54,3 +54,21 @@ Do not invent a passing noninferiority margin or a minimum sample size. Do not t
 ## Recorded stop — 2026-10-23
 
 Independent QA accepted IMP-003 at `f9716cb2f2490213ddd7013feff0e30c1d29a893`. The next milestone's success path needs an approved gate policy. That approval is absent, so IMP-004 and IMP-005 were not started. This stop does not change D-09, D-10, or D-11. It does not accept UO-001.
+
+## D-12 — Synthetic-demo gate calculator
+
+Work order RE-001-COMPLETE-001 authorizes `gate-policy-synthetic-demo-v1` for a synthetic demonstration. This decision records the calculator. It does not add the policy to `APPROVED_ACTIVATION_POLICIES`. v0 behavior is unchanged.
+
+The calculator reads server-stamped `runtime_scope`, `evidence_origin`, `label_origin`, and `live_provider_attempt_count`. It has no `eligible` argument. `runtime_scope=production` blocks safety with `production_runtime`. A live-provider attempt blocks with `live_provider_execution`. Any other non-demo scope or origin blocks with `nonsynthetic_evidence`.
+
+| Gate | Demo rule |
+|---|---|
+| Safety | Block on a production runtime, a live-provider attempt, nonsynthetic provenance, a critical violation, an incorrect required escalation, or a required escalation marked `verified_success`. |
+| Quality | Candidate `verified_success` count must be at least the baseline count. Candidate correct required-escalation count must be at least the baseline count. `correct_escalation` is not part of the `verified_success` numerator. An inconclusive assessment stays inconclusive instead of becoming a regression. |
+| Latency | Nearest-rank p95. One-based rank is `ceil(95 * n / 100)`, computed as `(95 * n + 99) // 100`. No interpolation. Candidate p95 must be less than or equal to baseline p95. |
+| Completeness | Manifest ids, both sides, assessments, costs, and latencies must match. Fewer than 100 matched cases is `insufficient_sample`. |
+| Economics | Invalid pricing, then a missing cost, then a zero verified-success denominator on either side. Otherwise the candidate execution-cost ratio must be strictly lower by cross multiplication: `candidate_cost * baseline_success < baseline_cost * candidate_success`. Integer quotients are not the comparison. Modeled labor, infrastructure, and risk are not in the sum. |
+
+Per-case latency and execution cost are the sums of every persisted attempt, including a failed attempt that preceded fallback. A case with no attempts is missing evidence, not zero.
+
+Eligibility from this function is not an activation. The release path still denies every policy until a later slice enforces the demo workflow boundary and a nonproduction server configuration.
