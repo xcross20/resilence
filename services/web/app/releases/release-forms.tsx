@@ -28,11 +28,13 @@ export function ReleaseForms({
   const [verifyState, verifyAction, verifyPending] = useActionState(verifyRelease, null);
   const [restoreState, restoreAction, restorePending] = useActionState(restoreRelease, null);
   const [activateKey, setActivateKey] = useState(() => crypto.randomUUID());
-  const [verifyKey] = useState(() => crypto.randomUUID());
+  const [verifyKey, setVerifyKey] = useState(() => crypto.randomUUID());
   const [restoreKey, setRestoreKey] = useState(() => crypto.randomUUID());
   const [evaluationId, setEvaluationId] = useState(evaluations.find((row) => row.eligible)?.evaluation_id ?? evaluations[0]?.evaluation_id ?? "");
   const selected = evaluations.find((row) => row.evaluation_id === evaluationId) ?? evaluations[0];
   const verificationCohorts = cohorts.filter((cohort) => cohort.purpose === "verification");
+  const [cohortId, setCohortId] = useState(verificationCohorts[0]?.cohort_id ?? "");
+  const selectedCohort = verificationCohorts.find((cohort) => cohort.cohort_id === cohortId) ?? verificationCohorts[0];
   return (
     <>
       <form action={activateAction}>
@@ -65,17 +67,22 @@ export function ReleaseForms({
         <input type="hidden" name="expected_generation" value={generation} />
         <input type="hidden" name="expected_active_revision" value={activeRevision ?? ""} />
         <label>Verification cohort
-          <select name="cohort_id" defaultValue={verificationCohorts[0]?.cohort_id ?? ""}>
+          <select
+            name="cohort_id"
+            value={selectedCohort?.cohort_id ?? ""}
+            onChange={(event) => {
+              setCohortId(event.target.value);
+              setVerifyKey(crypto.randomUUID());
+            }}
+          >
             {verificationCohorts.map((cohort) => <option key={cohort.cohort_id} value={cohort.cohort_id}>{cohort.cohort_id}</option>)}
           </select>
         </label>
         <label>Manifest
-          <select name="expected_manifest_sha256" defaultValue={verificationCohorts[0]?.manifest_sha256 ?? ""}>
-            {verificationCohorts.map((cohort) => <option key={cohort.cohort_id} value={cohort.manifest_sha256}>{cohort.manifest_sha256}</option>)}
-          </select>
+          <input name="expected_manifest_sha256" value={selectedCohort?.manifest_sha256 ?? ""} readOnly />
         </label>
         <label>Fixture version
-          <input name="expected_fixture_version" defaultValue={verificationCohorts[0]?.fixture_version ?? ""} readOnly />
+          <input name="expected_fixture_version" value={selectedCohort?.fixture_version ?? ""} readOnly />
         </label>
         <button type="submit" disabled={verifyPending}>Submit verification</button>
         <Result state={verifyState} />
